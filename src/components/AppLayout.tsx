@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
 import MobileNav from './MobileNav';
 import SplitView from './SplitView';
+import GlobalSearchModal from './GlobalSearchModal';
 import { loadShortcuts, matchesAnyShortcut, runShortcutAction, isShortcutCapturing } from '@/lib/shortcuts';
 import { trackPageVisit } from '@/lib/usage';
 
@@ -52,6 +53,13 @@ const AppLayout: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
           runShortcutAction(hit.action, (p: string) => navigate(p), hit.shortcut);
+          return;
+        }
+        // Standard Cmd+K fallback on macOS alongside Ctrl+K default shortcut
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(new CustomEvent('shortcut:global-search'));
         }
       } catch {}
     };
@@ -71,6 +79,7 @@ const AppLayout: React.FC = () => {
           <Outlet />
         </SplitView>
       </main>
+      <GlobalSearchModal />
     </div>
   );
 };

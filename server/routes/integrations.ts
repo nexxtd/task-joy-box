@@ -104,11 +104,88 @@ router.post('/clickup/connect', requireAuth, async (req: AuthRequest, res: Respo
 
 
 // ---------------------------------------------------------------------------
-// One-click sign-in (OAuth) — users never handle API keys.
-// Env: CLICKUP_CLIENT_ID, CLICKUP_CLIENT_SECRET, TRELLO_API_KEY (+ FRONTEND_URL / BACKEND_URL)
+// One-click sign-in (OAuth) + optional token connect fallback
+// Env: CLICKUP_CLIENT_ID, CLICKUP_CLIENT_SECRET, TRELLO_CLIENT_ID, TRELLO_CLIENT_SECRET
 // ---------------------------------------------------------------------------
 const OAUTH_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'planora-integrations';
-const frontendBase = () => (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+const OAUTH_AES_KEY = crypto.createHash('sha256').update(OAUTH_SECRET).digest();
+
+function normalizeOriginUrl(raw?: string | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isSafeAppOrigin(candidate: string | null, req: AuthRequest): candidate is string {
+  if (!candidate) return false;
+  try {
+    const u = new URL(candidate);
+    if (/^(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)$/i.test(u.hostname)) return true;
+    const reqHost = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+    if (reqHost && u.host === reqHost) return true;
+    const allowedHosts = new Set<string>();
+    for (const envKey of ['FRONTEND_URL', 'BACKEND_URL', 'RENDER_EXTERNAL_URL', 'CF_TUNNEL_URL', 'VERCEL_URL', 'VERCEL_PROJECT_PRODUCTION_URL']) {
+      const val = (process.env[envKey] || '').trim();
+      if (!val) continue;
+      const withProto = val.startsWith('http') ? val : `https://${val}`;
+      const norm = normalizeOriginUrl(withProto);
+      if (norm) allowedHosts.add(new URL(norm).host);
+    }
+    if (process.env.HOST) {
+      allowedHosts.add(process.env.HOST.replace(/^https?:\/\//, '').replace(/\/+$/, ''));
+    }
+    if (u.hostname.endsWith('.trycloudflare.com')) return true;
+    return allowedHosts.has(u.host);
+  } catch {
+    return false;
+  }
+}
+
+function requestOriginBase(req: AuthRequest): string {
+  const queryOrigin = normalizeOriginUrl(typeof req.query?.origin === 'string' ? req.query.origin : null);
+  if (isSafeAppOrigin(queryOrigin, req)) return queryOrigin;
+  const headerOrigin = normalizeOriginUrl(req.get('origin'));
+  if (isSafeAppOrigin(headerOrigin, req)) return headerOrigin;
+  const fwdHost = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  const fwdProto = ((req.headers['x-forwarded-proto'] as string) || req.protocol || 'https').split(',')[0].trim();
+  if (fwdHost) return `${fwdProto}://${fwdHost}`;
+  const fallback = normalizeOriginUrl(process.env.BACKEND_URL || process.env.FRONTEND_URL);
+  return fallback || 'http://localhost:5000';
+}
+
+function frontendBase(preferredOrigin?: string | null): string {
+  const safePreferred = normalizeOriginUrl(preferredOrigin);
+  if (safePreferred) return safePreferred;
+  return (process.env.FRONTEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+}
+
+function encryptSecretPayload(obj: object): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', OAUTH_AES_KEY, iv);
+  const enc = Buffer.concat([cipher.update(JSON.stringify(obj), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, enc]).toString('base64url');
+}
+
+function decryptSecretPayload(token: string): any {
+  try {
+    const raw = Buffer.from(token, 'base64url');
+    if (raw.length < 28) return null;
+    const iv = raw.subarray(0, 12);
+    const tag = raw.subarray(12, 28);
+    const enc = raw.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', OAUTH_AES_KEY, iv);
+    decipher.setAuthTag(tag);
+    return JSON.parse(Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8'));
+  } catch {
+    return null;
+  }
+}
 
 function signOAuthState(data: object): string {
   const payload = JSON.stringify(data);
@@ -128,10 +205,14 @@ function verifyOAuthState(state: string): any {
   }
 }
 
-function backendBase(req: AuthRequest): string {
-  if (process.env.BACKEND_URL) return process.env.BACKEND_URL.replace(/\/$/, '');
-  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0] || req.protocol;
-  return `${proto}://${req.get('host')}`;
+function clickupRedirectUri(req: AuthRequest): string {
+  if (process.env.CLICKUP_REDIRECT_URI?.trim()) return process.env.CLICKUP_REDIRECT_URI.trim();
+  return `${requestOriginBase(req)}/api/integrations/clickup/callback`;
+}
+
+function isSecureRequest(req: AuthRequest): boolean {
+  const proto = ((req.headers['x-forwarded-proto'] as string) || req.protocol || '').split(',')[0].trim();
+  return Boolean(req.secure || proto === 'https');
 }
 
 async function saveConnection(userId: number, provider: string, data: { accountName: string; accountEmail: string; accessToken: string; metadata: object }) {
@@ -150,31 +231,48 @@ async function saveConnection(userId: number, provider: string, data: { accountN
 
 // ClickUp: start sign-in
 router.get('/clickup/auth', requireAuth, (req: AuthRequest, res: Response) => {
-  const clientId = process.env.CLICKUP_CLIENT_ID;
-  if (!clientId || !process.env.CLICKUP_CLIENT_SECRET) {
-    return res.status(503).json({ error: 'ClickUp sign-in is not configured on the server yet (CLICKUP_CLIENT_ID / CLICKUP_CLIENT_SECRET).' });
+  const clientId = (process.env.CLICKUP_CLIENT_ID || '').trim();
+  if (!clientId || !(process.env.CLICKUP_CLIENT_SECRET || '').trim()) {
+    return res.status(503).json({ error: 'ClickUp OAuth is not configured on the server (CLICKUP_CLIENT_ID / CLICKUP_CLIENT_SECRET).' });
   }
-  const redirectUri = `${backendBase(req)}/api/integrations/clickup/callback`;
-  const state = signOAuthState({ userId: req.userId, ts: Date.now() });
+  const returnOrigin = requestOriginBase(req);
+  const redirectUri = clickupRedirectUri(req);
+  const state = signOAuthState({ userId: req.userId, ts: Date.now(), returnOrigin });
   const authUrl = `https://app.clickup.com/api?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
-  res.json({ authUrl });
+  res.json({ authUrl, redirectUri });
 });
 
 // ClickUp: OAuth callback — exchange code, save, import everything, return to Settings
 router.get('/clickup/callback', async (req: AuthRequest, res: Response) => {
-  const back = (q: string) => res.redirect(`${frontendBase()}/settings?tab=account&${q}`);
-  const { code, state, error } = req.query as Record<string, string>;
-  if (error || !code) return back(`integrationError=clickup_${encodeURIComponent(error || 'denied')}`);
+  const { code, state, error, error_description } = req.query as Record<string, string>;
   const st = verifyOAuthState(state || '');
-  if (!st) return back('integrationError=clickup_expired');
+  const baseOrigin = isSafeAppOrigin(st?.returnOrigin || null, req) ? st.returnOrigin : frontendBase();
+  const back = (q: string) => res.redirect(`${baseOrigin}/settings?tab=account&${q}`);
+
+  if (error || !code) {
+    const reason = encodeURIComponent(String(error_description || error || 'Sign-in was denied or cancelled.').slice(0, 180));
+    return back(`integrationError=clickup_${encodeURIComponent(error || 'denied')}&integrationErrorReason=${reason}`);
+  }
+  if (!st) {
+    return back('integrationError=clickup_expired&integrationErrorReason=' + encodeURIComponent('OAuth state expired or invalid.'));
+  }
   try {
-    const tokenRes = await fetch(
-      `${CLICKUP_API}/oauth/token?client_id=${encodeURIComponent(process.env.CLICKUP_CLIENT_ID || '')}&client_secret=${encodeURIComponent(process.env.CLICKUP_CLIENT_SECRET || '')}&code=${encodeURIComponent(code)}`,
-      { method: 'POST' },
-    );
+    // ClickUp documents these as query parameters; send them in the body too.
+    const tokenParams = {
+      client_id: (process.env.CLICKUP_CLIENT_ID || '').trim(),
+      client_secret: (process.env.CLICKUP_CLIENT_SECRET || '').trim(),
+      code,
+    };
+    const tokenRes = await fetch(`${CLICKUP_API}/oauth/token?${new URLSearchParams(tokenParams).toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(tokenParams),
+    });
     const tokenData: any = await tokenRes.json().catch(() => ({}));
     const accessToken = tokenData?.access_token;
-    if (!tokenRes.ok || !accessToken) throw new Error(tokenData?.err || 'Token exchange failed');
+    if (!tokenRes.ok || !accessToken) {
+      throw new Error(tokenData?.err || tokenData?.error_description || tokenData?.error || `Token exchange failed (${tokenRes.status})`);
+    }
 
     const userData = await clickupFetch('/user', accessToken);
     const teamsData = await clickupFetch('/team', accessToken);
@@ -188,32 +286,50 @@ router.get('/clickup/callback', async (req: AuthRequest, res: Response) => {
     });
 
     let imported = 0;
-    for (const team of teams) {
-      try {
-        const r: any = await runClickUpImport(st.userId, accessToken, [], String(team.id));
-        imported += Number(r?.imported?.tasks || 0);
-      } catch (e) {
-        console.warn('ClickUp auto-import failed for team', team.id, (e as any)?.message || e);
+    const importPromise = (async () => {
+      for (const team of teams) {
+        try {
+          const r: any = await runClickUpImport(st.userId, accessToken, [], String(team.id));
+          imported += Number(r?.imported?.tasks || 0);
+        } catch (e) {
+          console.warn('ClickUp auto-import failed for team', team.id, (e as any)?.message || e);
+        }
       }
-    }
+    })();
+    // Guard redirect against proxy timeouts if the workspace has many lists
+    await Promise.race([importPromise, new Promise(resolve => setTimeout(resolve, 12000))]);
     back(`connected=clickup&imported=${imported}`);
   } catch (e: any) {
     console.error('ClickUp OAuth callback failed:', e?.message || e);
-    back('integrationError=clickup_failed');
+    const reason = encodeURIComponent(String(e?.message || 'ClickUp authentication failed.').slice(0, 180));
+    back(`integrationError=clickup_failed&integrationErrorReason=${reason}`);
   }
 });
 
 // ---- Trello ----
-// Trello OAuth 2.0 (Atlassian 3LO + PKCE). REST calls go to trello.com with a Bearer token.
+// Trello OAuth 2.0 (Atlassian OAuth + PKCE) AND REST Key+Token connect.
 // Env: TRELLO_CLIENT_ID (falls back to TRELLO_API_KEY), TRELLO_CLIENT_SECRET.
-const TRELLO_API = 'https://trello.com/1';
+const TRELLO_API = 'https://api.trello.com/1';
 const ATLASSIAN_TOKEN_URL = 'https://auth.atlassian.com/oauth/token';
 const TRELLO_SCOPES = 'read:member:trello read:board:trello read:organization:trello offline_access';
-const trelloClientId = () => process.env.TRELLO_CLIENT_ID || process.env.TRELLO_API_KEY || '';
-const trelloRedirectUri = (req: AuthRequest) => `${backendBase(req)}/api/integrations/trello/callback`;
+const trelloClientId = () => (process.env.TRELLO_CLIENT_ID || process.env.TRELLO_API_KEY || '').trim();
+const trelloRedirectUri = (req: AuthRequest) => {
+  if (process.env.TRELLO_REDIRECT_URI?.trim()) return process.env.TRELLO_REDIRECT_URI.trim();
+  return `${requestOriginBase(req)}/api/integrations/trello/callback`;
+};
 
-async function trelloFetch(path: string, accessToken: string) {
-  const r = await fetch(`${TRELLO_API}${path}`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } });
+async function trelloFetch(path: string, auth: string | { token: string; apiKey?: string }) {
+  const token = typeof auth === 'string' ? auth : auth.token;
+  const apiKey = typeof auth === 'string' ? '' : (auth.apiKey || '').trim();
+  if (apiKey) {
+    const sep = path.includes('?') ? '&' : '?';
+    const r = await fetch(`${TRELLO_API}${path}${sep}key=${encodeURIComponent(apiKey)}&token=${encodeURIComponent(token)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!r.ok) throw new Error(`Trello API error (${r.status}): ${await r.text().catch(() => r.statusText)}`);
+    return r.json();
+  }
+  const r = await fetch(`${TRELLO_API}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`Trello API error (${r.status}): ${await r.text().catch(() => r.statusText)}`);
   return r.json();
 }
@@ -222,20 +338,22 @@ async function trelloTokenRequest(body: Record<string, string>) {
   const r = await fetch(ATLASSIAN_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ client_id: trelloClientId(), client_secret: process.env.TRELLO_CLIENT_SECRET || '', ...body }),
+    body: JSON.stringify({ client_id: trelloClientId(), client_secret: (process.env.TRELLO_CLIENT_SECRET || '').trim(), ...body }),
   });
   const data: any = await r.json().catch(() => ({}));
   if (!r.ok || !data.access_token) throw new Error(data.error_description || data.error || `Token request failed (${r.status})`);
   return data as { access_token: string; refresh_token?: string; expires_in?: number };
 }
 
-/** Returns a valid access token for the user's Trello connection, refreshing (and persisting) it when expired. */
-async function getTrelloAccessToken(conn: typeof connectedAccounts.$inferSelect): Promise<string> {
+/** Returns valid auth credentials for the user's Trello connection, refreshing OAuth tokens when expired. */
+async function getTrelloAccessAuth(conn: typeof connectedAccounts.$inferSelect): Promise<string | { token: string; apiKey?: string }> {
   let meta: any = {};
   try { meta = JSON.parse(conn.metadata || '{}'); } catch {}
+  if (meta.apiKey) {
+    return { token: conn.accessToken, apiKey: meta.apiKey };
+  }
   if (!meta.refreshToken || Date.now() < Number(meta.expiresAt || 0) - 60_000) return conn.accessToken;
   const t = await trelloTokenRequest({ grant_type: 'refresh_token', refresh_token: meta.refreshToken });
-  // Refresh tokens are single-use: always store the new one.
   const nextMeta = { ...meta, refreshToken: t.refresh_token || meta.refreshToken, expiresAt: Date.now() + (t.expires_in || 3600) * 1000 };
   await db.update(connectedAccounts)
     .set({ accessToken: t.access_token, metadata: JSON.stringify(nextMeta), updatedAt: new Date().toISOString() })
@@ -245,48 +363,86 @@ async function getTrelloAccessToken(conn: typeof connectedAccounts.$inferSelect)
 
 const b64url = (buf: Buffer) => buf.toString('base64url');
 
-// Trello: start sign-in (PKCE verifier kept in an httpOnly cookie, never in the URL)
+// Trello: start sign-in (PKCE verifier sealed inside signed state + fallback cookie)
 router.get('/trello/auth', requireAuth, (req: AuthRequest, res: Response) => {
-  if (!trelloClientId() || !process.env.TRELLO_CLIENT_SECRET) {
-    return res.status(503).json({ error: 'Trello sign-in is not configured on the server yet (TRELLO_CLIENT_ID / TRELLO_CLIENT_SECRET).' });
+  const returnOrigin = requestOriginBase(req);
+
+  // Preferred: Trello's own "Allow access" screen (trello.com/1/authorize).
+  // Needs a Trello Power-Up API key (TRELLO_API_KEY), with the app origin
+  // listed under the Power-Up's "Allowed origins". Trello sends the token
+  // back in the URL fragment, which the Settings page posts to /trello/connect.
+  const trelloApiKey = (process.env.TRELLO_API_KEY || '').trim();
+  if (trelloApiKey) {
+    const params = new URLSearchParams({
+      expiration: 'never',
+      name: 'MyPlanner',
+      scope: 'read',
+      response_type: 'token',
+      callback_method: 'fragment',
+      key: trelloApiKey,
+      return_url: `${returnOrigin}/settings?tab=account&trelloCallback=1`,
+    });
+    return res.json({ authUrl: `https://trello.com/1/authorize?${params.toString()}`, flow: 'trello_token' });
   }
+
+  if (!trelloClientId() || !(process.env.TRELLO_CLIENT_SECRET || '').trim()) {
+    return res.status(503).json({ error: 'Trello sign-in is not configured on the server. Add TRELLO_API_KEY (from trello.com/power-ups/admin).' });
+  }
+  const redirectUri = trelloRedirectUri(req);
   const verifier = b64url(crypto.randomBytes(32));
   const challenge = b64url(crypto.createHash('sha256').update(verifier).digest());
   const nonce = b64url(crypto.randomBytes(16));
-  const state = signOAuthState({ userId: req.userId, ts: Date.now(), nonce });
+  const sealedPkce = encryptSecretPayload({ verifier, redirectUri });
+  const state = signOAuthState({ userId: req.userId, ts: Date.now(), nonce, returnOrigin, pkce: sealedPkce });
   res.cookie('trello_pkce', `${nonce}.${verifier}`, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureRequest(req),
     sameSite: 'lax',
     maxAge: 15 * 60 * 1000,
     path: '/api/integrations/trello',
   });
+  // Trello OAuth 2.0 on auth.atlassian.com does not take audience=api.atlassian.com
   const params = new URLSearchParams({
-    audience: 'api.atlassian.com',
     client_id: trelloClientId(),
     scope: TRELLO_SCOPES,
-    redirect_uri: trelloRedirectUri(req),
+    redirect_uri: redirectUri,
     state,
     response_type: 'code',
     prompt: 'consent',
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
-  res.json({ authUrl: `https://auth.atlassian.com/authorize?${params.toString()}` });
+  res.json({ authUrl: `https://auth.atlassian.com/authorize?${params.toString()}`, redirectUri });
 });
 
 // Trello: OAuth callback — exchange code, save, import everything, return to Settings
 router.get('/trello/callback', async (req: AuthRequest, res: Response) => {
-  const back = (q: string) => res.redirect(`${frontendBase()}/settings?tab=account&${q}`);
-  const { code, state, error } = req.query as Record<string, string>;
-  if (error || !code) return back(`integrationError=trello_${encodeURIComponent(error || 'denied')}`);
+  const { code, state, error, error_description } = req.query as Record<string, string>;
   const st = verifyOAuthState(state || '');
+  const baseOrigin = isSafeAppOrigin(st?.returnOrigin || null, req) ? st.returnOrigin : frontendBase();
+  const back = (q: string) => res.redirect(`${baseOrigin}/settings?tab=account&${q}`);
+
   const cookie = String(req.headers.cookie || '').split(/;\s*/).find(c => c.startsWith('trello_pkce='))?.slice('trello_pkce='.length) || '';
-  const [nonce, verifier] = decodeURIComponent(cookie).split('.');
+  const [cookieNonce, cookieVerifier] = decodeURIComponent(cookie).split('.');
   res.clearCookie('trello_pkce', { path: '/api/integrations/trello' });
-  if (!st || !verifier || nonce !== st.nonce) return back('integrationError=trello_expired');
+
+  if (error || !code) {
+    const reason = encodeURIComponent(String(error_description || error || 'Sign-in was denied or cancelled.').slice(0, 180));
+    return back(`integrationError=trello_${encodeURIComponent(error || 'denied')}&integrationErrorReason=${reason}`);
+  }
+  if (!st) {
+    return back('integrationError=trello_expired&integrationErrorReason=' + encodeURIComponent('Sign-in state expired. Please try again.'));
+  }
+
+  const pkceFromState = st.pkce ? decryptSecretPayload(st.pkce) : null;
+  const verifier = pkceFromState?.verifier || (cookieNonce === st.nonce ? cookieVerifier : '');
+  const usedRedirectUri = pkceFromState?.redirectUri || trelloRedirectUri(req);
+
+  if (!verifier) {
+    return back('integrationError=trello_expired&integrationErrorReason=' + encodeURIComponent('PKCE session could not be verified.'));
+  }
   try {
-    const t = await trelloTokenRequest({ grant_type: 'authorization_code', code, redirect_uri: trelloRedirectUri(req), code_verifier: verifier });
+    const t = await trelloTokenRequest({ grant_type: 'authorization_code', code, redirect_uri: usedRedirectUri, code_verifier: verifier });
     const me: any = await trelloFetch('/members/me?fields=username,fullName,email,avatarUrl', t.access_token);
     await saveConnection(st.userId, 'trello', {
       accountName: me.fullName || me.username || 'Trello User',
@@ -296,19 +452,72 @@ router.get('/trello/callback', async (req: AuthRequest, res: Response) => {
     });
     let imported = 0;
     try {
-      imported = (await runTrelloImport(st.userId, t.access_token)).tasks;
+      const importResult = await Promise.race([
+        runTrelloImport(st.userId, t.access_token),
+        new Promise<{ tasks: number }>(resolve => setTimeout(() => resolve({ tasks: 0 }), 12000)),
+      ]);
+      imported = importResult.tasks;
     } catch (e) {
       console.warn('Trello auto-import failed:', (e as any)?.message || e);
     }
     back(`connected=trello&imported=${imported}`);
   } catch (e: any) {
     console.error('Trello OAuth callback failed:', e?.message || e);
-    back('integrationError=trello_failed');
+    const reason = encodeURIComponent(String(e?.message || 'Trello authentication failed.').slice(0, 180));
+    back(`integrationError=trello_failed&integrationErrorReason=${reason}`);
   }
 });
 
-async function runTrelloImport(userId: number, token: string) {
-  const boardsList: any[] = await trelloFetch('/members/me/boards?filter=open&fields=name,desc', token);
+// Trello: direct Key+Token or Bearer Token connect fallback
+router.post('/trello/connect', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    // Tokens from the one-click flow were issued for the server's own API key.
+    const fromOneClick = req.body?.fromOneClick === true;
+    const apiKey = fromOneClick
+      ? (process.env.TRELLO_API_KEY || '').trim()
+      : typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    if (!token) {
+      return res.status(400).json({ error: 'Trello Token is required.' });
+    }
+    if (fromOneClick && !apiKey) {
+      return res.status(503).json({ error: 'Trello sign-in is not configured on the server (TRELLO_API_KEY).' });
+    }
+    const authPayload = apiKey ? { token, apiKey } : token;
+    const me: any = await trelloFetch('/members/me?fields=username,fullName,email,avatarUrl', authPayload);
+    await saveConnection(req.userId!, 'trello', {
+      accountName: me.fullName || me.username || 'Trello User',
+      accountEmail: me.email || '',
+      accessToken: token,
+      metadata: { username: me.username || '', avatarUrl: me.avatarUrl || '', apiKey: apiKey || '', auth: apiKey ? 'api_key_token' : 'token' },
+    });
+    // One-click sign-in imports everything straight away, like the ClickUp flow.
+    let imported = 0;
+    if (fromOneClick) {
+      try {
+        const result = await Promise.race([
+          runTrelloImport(req.userId!, authPayload),
+          new Promise<{ tasks: number }>(resolve => setTimeout(() => resolve({ tasks: 0 }), 12000)),
+        ]);
+        imported = result.tasks;
+      } catch (e) {
+        console.warn('Trello auto-import failed:', (e as any)?.message || e);
+      }
+    }
+    res.json({
+      success: true,
+      accountName: me.fullName || me.username || 'Trello User',
+      accountEmail: me.email || '',
+      imported,
+    });
+  } catch (error: any) {
+    console.error('Trello direct connect failed:', error?.message || error);
+    res.status(400).json({ error: error?.message || 'Could not verify Trello credentials. Check your API Key and Token and try again.' });
+  }
+});
+
+async function runTrelloImport(userId: number, auth: string | { token: string; apiKey?: string }) {
+  const boardsList: any[] = await trelloFetch('/members/me/boards?filter=open&fields=name,desc', auth);
   const [snapshotRow] = await db.select().from(boardSnapshots).where(eq(boardSnapshots.userId, userId)).orderBy(desc(boardSnapshots.updatedAt)).limit(1);
   let currentBoard: any = { columns: [], tasks: [] };
   if (snapshotRow?.snapshot) { try { currentBoard = JSON.parse(snapshotRow.snapshot); } catch {} }
@@ -346,8 +555,8 @@ async function runTrelloImport(userId: number, token: string) {
     let lists: any[] = [];
     let cards: any[] = [];
     try {
-      lists = await trelloFetch(`/boards/${b.id}/lists?filter=all&fields=name,closed`, token);
-      cards = await trelloFetch(`/boards/${b.id}/cards?filter=all&checklists=all&fields=name,desc,due,dueComplete,closed,idList,labels,dateLastActivity`, token);
+      lists = await trelloFetch(`/boards/${b.id}/lists?filter=all&fields=name,closed`, auth);
+      cards = await trelloFetch(`/boards/${b.id}/cards?filter=all&checklists=all&fields=name,desc,due,dueComplete,closed,idList,labels,dateLastActivity`, auth);
     } catch (err) {
       console.error('Failed to fetch Trello board', b.id, err);
       continue;
@@ -416,7 +625,7 @@ router.post('/trello/import', requireAuth, async (req: AuthRequest, res: Respons
     const [conn] = await db.select().from(connectedAccounts)
       .where(and(eq(connectedAccounts.userId, req.userId!), eq(connectedAccounts.provider, 'trello'))).limit(1);
     if (!conn) return res.status(401).json({ error: 'Trello is not connected.' });
-    const imported = await runTrelloImport(req.userId!, await getTrelloAccessToken(conn));
+    const imported = await runTrelloImport(req.userId!, await getTrelloAccessAuth(conn));
     res.json({ success: true, imported, message: imported.tasks ? `Imported ${imported.tasks} new cards.` : 'Everything from Trello is already imported.' });
   } catch (e: any) {
     console.error('Trello import failed:', e?.message || e);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   LayoutTemplate,
@@ -21,6 +21,7 @@ import {
   BookmarkPlus,
   Loader2,
   KeyRound,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -68,7 +69,7 @@ interface GalleryTemplateItem {
   raw: TaskTemplate | null;
 }
 
-const TemplatesPage: React.FC = () => {
+export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -135,7 +136,10 @@ const TemplatesPage: React.FC = () => {
     if (initialTypeParam === 'task' || initialTypeParam === 'note') {
       setTypeFilter(initialTypeParam);
     }
-  }, [initialTypeParam]);
+    if (initialApplyToId) {
+      setExistingTargetId(initialApplyToId);
+    }
+  }, [initialTypeParam, initialApplyToId]);
 
   // Build unified deduplicated gallery catalog
   const allTemplates = useMemo<GalleryTemplateItem[]>(() => {
@@ -166,8 +170,9 @@ const TemplatesPage: React.FC = () => {
       });
     });
 
-    // 2. Public community templates (including user's own public templates when not duplicated)
+    // 2. Public community templates (strictly exclude private templates; user's own public show as mine)
     publicTaskTemplates.forEach(t => {
+      if (t.isPublic === false) return;
       seenTaskIds.add(t.id);
       const isMine = t.userId === user?.id;
       items.push({
@@ -192,6 +197,7 @@ const TemplatesPage: React.FC = () => {
     });
 
     publicNoteTemplates.forEach(t => {
+      if (t.isPublic === false) return;
       seenNoteIds.add(t.id);
       const isMine = t.userId === user?.id;
       items.push({
@@ -268,6 +274,9 @@ const TemplatesPage: React.FC = () => {
   const filteredTemplates = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allTemplates.filter(item => {
+      if (item.source !== 'mine' && item.isPublic === false) return false;
+      // Private templates only belong in "My Templates" — keep them hidden from general browse tabs
+      if (sourceFilter !== 'mine' && item.isPublic === false) return false;
       if (typeFilter !== 'all' && item.kind !== typeFilter) return false;
       if (sourceFilter !== 'all' && item.source !== sourceFilter) return false;
       if (priorityFilter !== 'all' && item.priority !== priorityFilter) return false;
@@ -378,6 +387,15 @@ const TemplatesPage: React.FC = () => {
       return;
     }
 
+    const existingLabels = existing.labels || [];
+    const incomingLabels = Array.isArray(item.labels) ? item.labels : [];
+    const mergedLabels = [...existingLabels];
+    incomingLabels.forEach((lbl: any) => {
+      if (lbl?.name && !mergedLabels.some(l => l.name.toLowerCase() === String(lbl.name).toLowerCase())) {
+        mergedLabels.push({ ...lbl, id: lbl.id || `lbl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+      }
+    });
+
     ctx.updateTask(targetId, {
       description: item.description
         ? existing.description
@@ -386,6 +404,7 @@ const TemplatesPage: React.FC = () => {
         : existing.description,
       priority: existing.priority === 'none' ? item.priority : existing.priority,
       duration: existing.duration || item.duration || 0,
+      labels: mergedLabels,
       subtasks: [...(existing.subtasks || []), ...buildClonedSubtasks(item)],
       checklists: [...(existing.checklists || []), ...buildClonedChecklists(item)],
     });
@@ -497,7 +516,7 @@ const TemplatesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
+    <div className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-background ${embedded ? 'rounded-2xl border border-border shadow-sm min-h-[680px]' : ''}`}>
       {/* Header */}
       <header className="px-4 sm:px-6 py-3.5 border-b border-border bg-card flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -776,6 +795,16 @@ const TemplatesPage: React.FC = () => {
                         >
                           {item.source === 'default' ? 'Default' : item.authorName}
                         </span>
+                        {item.source === 'mine' && (
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                            item.isPublic
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          }`}>
+                            {item.isPublic ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                            {item.isPublic ? 'Public' : 'Private'}
+                          </span>
+                        )}
                       </div>
                       {priorityMeta && (
                         <span
@@ -856,6 +885,11 @@ const TemplatesPage: React.FC = () => {
                     <span className="text-[11px] font-semibold text-muted-foreground">
                       by {selectedTemplate.authorName}
                     </span>
+                    {selectedTemplate.source === 'mine' && selectedTemplate.isPublic === false && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        <Lock className="w-2.5 h-2.5" /> Private (only in My Templates)
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-lg font-black text-foreground">{selectedTemplate.name}</h2>
                 </div>
@@ -1078,6 +1112,13 @@ const TemplatesPage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+const TemplatesPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const nextParams = new URLSearchParams(searchParams);
+  nextParams.set('tab', 'templates');
+  return <Navigate to={`/settings?${nextParams.toString()}`} replace />;
 };
 
 export default TemplatesPage;

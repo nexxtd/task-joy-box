@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Link2, Link2Off, RefreshCw, CheckCircle2, AlertTriangle, ExternalLink,
   Download, Upload, Check, FolderKanban, ListChecks, Layers, Sparkles, ChevronRight,
-  ChevronDown, ArrowRight, Loader2, FileText, CheckSquare
+  ChevronDown, ArrowRight, Loader2, FileText, CheckSquare, KeyRound
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,7 +47,11 @@ export default function IntegrationsSection() {
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
 
   // Connect form
-  const [connecting, setConnecting] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<'clickup' | 'trello' | null>(null);
+  const [showClickupTokenForm, setShowClickupTokenForm] = useState(false);
+  const [clickupTokenInput, setClickupTokenInput] = useState('');
+  const [clickupTokenBusy, setClickupTokenBusy] = useState(false);
+  const [oauthErrorBanner, setOauthErrorBanner] = useState<string>('');
 
   // Hierarchy & selection
   const [loadingHierarchy, setLoadingHierarchy] = useState(false);
@@ -96,37 +100,115 @@ export default function IntegrationsSection() {
   // One-click sign-in: the server builds the provider's OAuth URL and we
   // redirect there. On return the server has already imported everything.
   const startOAuth = async (provider: 'clickup' | 'trello') => {
-    setConnecting(true);
+    setConnectingProvider(provider);
+    setOauthErrorBanner('');
     try {
-      const res = await fetch(`/api/integrations/${provider}/auth`, { credentials: 'include' });
+      const origin = encodeURIComponent(window.location.origin);
+      const res = await fetch(`/api/integrations/${provider}/auth?origin=${origin}`, { credentials: 'include' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.authUrl) throw new Error(data.error || 'Could not start sign-in');
       window.location.href = data.authUrl;
     } catch (err: any) {
       toast({ title: 'Sign-in unavailable', description: err.message, variant: 'destructive' });
-      setConnecting(false);
+      setOauthErrorBanner(err.message);
+      if (provider === 'clickup') setShowClickupTokenForm(true);
+      setConnectingProvider(null);
+    }
+  };
+
+  const handleClickupTokenConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clickupTokenInput.trim()) return;
+    setClickupTokenBusy(true);
+    try {
+      const res = await fetch('/api/integrations/clickup/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token: clickupTokenInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to connect ClickUp token');
+      setClickupTokenInput('');
+      setShowClickupTokenForm(false);
+      setOauthErrorBanner('');
+      toast({ title: 'ClickUp connected', description: `Signed in as ${data.user?.username || 'ClickUp User'}.` });
+      await checkStatus();
+    } catch (err: any) {
+      toast({ title: 'ClickUp token error', description: err.message, variant: 'destructive' });
+    } finally {
+      setClickupTokenBusy(false);
     }
   };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const clean = () => {
-      ['connected', 'imported', 'integrationError', 'trelloCallback'].forEach(k => params.delete(k));
+      ['connected', 'imported', 'integrationError', 'integrationErrorReason', 'trelloCallback'].forEach(k => params.delete(k));
       const qs = params.toString();
       window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
     };
+    // Trello's own "Allow" screen returns the token in the URL fragment.
+    if (params.get('trelloCallback') === '1') {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const token = hash.get('token') || '';
+      const hashError = hash.get('error') || '';
+      // Strip the token from the address bar before anything else runs.
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      clean();
+      if (!token) {
+        const desc = hashError ? 'Trello sign-in was cancelled.' : 'Trello did not return an access token. Please try again.';
+        toast({ title: 'Connection failed', description: desc, variant: 'destructive' });
+        setOauthErrorBanner(desc);
+        return;
+      }
+      setConnectingProvider('trello');
+      void (async () => {
+        try {
+          const res = await fetch('/api/integrations/trello/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token, fromOneClick: true }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Could not connect Trello');
+          toast({ title: 'Trello connected', description: `Imported ${data.imported || 0} tasks from Trello.` });
+          window.dispatchEvent(new Event('trello-connected'));
+        } catch (err: any) {
+          toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
+          setOauthErrorBanner(err.message);
+        } finally {
+          setConnectingProvider(null);
+        }
+      })();
+      return;
+    }
+
     const provider = params.get('connected');
     if (provider === 'clickup' || provider === 'trello') {
       const name = provider === 'clickup' ? 'ClickUp' : 'Trello';
       toast({ title: `${name} connected`, description: `Imported ${params.get('imported') || 0} tasks from ${name}.` });
+      if (provider === 'clickup') void checkStatus();
+      if (provider === 'trello') window.dispatchEvent(new Event('trello-connected'));
       clean();
     } else if (params.get('integrationError')) {
       const code = params.get('integrationError') || '';
+      const reason = params.get('integrationErrorReason') || '';
+      const desc = reason
+        ? reason
+        : code.endsWith('denied') || code.endsWith('access_denied')
+          ? 'Sign-in was cancelled.'
+          : code.endsWith('expired')
+            ? 'Sign-in session expired. Please try again or use an API token below.'
+            : 'Something went wrong while connecting. Please try again or connect with an API token.';
       toast({
         title: 'Connection failed',
-        description: code.endsWith('denied') || code.endsWith('access_denied') ? 'Sign-in was cancelled.' : code.endsWith('expired') ? 'Sign-in took too long. Please try again.' : 'Something went wrong while connecting. Please try again.',
+        description: desc,
         variant: 'destructive',
       });
+      setOauthErrorBanner(desc);
+      if (code.startsWith('clickup')) setShowClickupTokenForm(true);
       clean();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,7 +434,7 @@ export default function IntegrationsSection() {
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-col items-end gap-2">
             {connected ? (
               <button
                 onClick={handleDisconnect}
@@ -361,17 +443,57 @@ export default function IntegrationsSection() {
                 Disconnect
               </button>
             ) : (
-              <button
-                onClick={() => startOAuth('clickup')}
-                disabled={connecting}
-                className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
-              >
-                {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                Sign in with ClickUp
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => startOAuth('clickup')}
+                  disabled={connectingProvider === 'clickup'}
+                  className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
+                >
+                  {connectingProvider === 'clickup' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                  Sign in with ClickUp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowClickupTokenForm(v => !v)}
+                  className="px-3 py-2.5 text-xs font-bold rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all inline-flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {showClickupTokenForm ? 'Hide Token' : 'Use API Token'}
+                </button>
+              </div>
             )}
           </div>
         </div>
+
+        {!connected && showClickupTokenForm && (
+          <form onSubmit={handleClickupTokenConnect} className="mt-4 pt-4 border-t border-border space-y-2.5">
+            {oauthErrorBanner && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                {oauthErrorBanner}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="password"
+                value={clickupTokenInput}
+                onChange={e => setClickupTokenInput(e.target.value)}
+                placeholder="Paste ClickUp Personal API Token (pk_...)"
+                className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+              />
+              <button
+                type="submit"
+                disabled={clickupTokenBusy || !clickupTokenInput.trim()}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              >
+                {clickupTokenBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Connect Token
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Find this in ClickUp → Settings → Apps → API Token.
+            </p>
+          </form>
+        )}
 
         {/* Connected state: Account info & Copy actions */}
         {connected && (
@@ -623,7 +745,7 @@ export default function IntegrationsSection() {
         )}
       </div>
 
-      <TrelloCard onSignIn={() => startOAuth('trello')} signingIn={connecting} />
+      <TrelloCard onSignIn={() => startOAuth('trello')} signingIn={connectingProvider === 'trello'} />
 
       {/* 2. Universal File Import Card (ClickUp CSV / JSON) */}
       <div className="bg-card border-2 border-border/80 rounded-3xl p-6 sm:p-8 shadow-sm">
@@ -713,6 +835,10 @@ function TrelloCard({ onSignIn, signingIn }: { onSignIn: () => void; signingIn: 
   const { toast } = useToast();
   const [status, setStatus] = useState<{ connected: boolean; accountName?: string; accountEmail?: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showTokenForm, setShowTokenForm] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [connectingToken, setConnectingToken] = useState(false);
 
   const load = async () => {
     try {
@@ -741,6 +867,31 @@ function TrelloCard({ onSignIn, signingIn }: { onSignIn: () => void; signingIn: 
       toast({ title: 'Trello sync failed', description: err.message, variant: 'destructive' });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const connectWithToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tokenInput.trim()) return;
+    setConnectingToken(true);
+    try {
+      const res = await fetch('/api/integrations/trello/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ apiKey: apiKeyInput.trim(), token: tokenInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to connect Trello');
+      setTokenInput('');
+      setApiKeyInput('');
+      setShowTokenForm(false);
+      toast({ title: 'Trello connected', description: `Signed in as ${data.accountName || 'Trello user'}.` });
+      await load();
+    } catch (err: any) {
+      toast({ title: 'Trello connect failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setConnectingToken(false);
     }
   };
 
@@ -778,7 +929,7 @@ function TrelloCard({ onSignIn, signingIn }: { onSignIn: () => void; signingIn: 
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {connected ? (
             <>
               <button
@@ -797,17 +948,61 @@ function TrelloCard({ onSignIn, signingIn }: { onSignIn: () => void; signingIn: 
               </button>
             </>
           ) : (
-            <button
-              onClick={onSignIn}
-              disabled={signingIn}
-              className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
-            >
-              {signingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-              Sign in with Trello
-            </button>
+            <>
+              <button
+                onClick={onSignIn}
+                disabled={signingIn}
+                className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
+              >
+                {signingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                Sign in with Trello
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTokenForm(v => !v)}
+                className="px-3 py-2.5 text-xs font-bold rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all inline-flex items-center gap-1.5"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                {showTokenForm ? 'Hide Token' : 'Use API Token'}
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {!connected && showTokenForm && (
+        <form onSubmit={connectWithToken} className="mt-4 pt-4 border-t border-border space-y-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={apiKeyInput}
+              onChange={e => setApiKeyInput(e.target.value)}
+              placeholder="Trello API Key (optional for Bearer tokens)"
+              className="bg-background border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+            />
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={e => setTokenInput(e.target.value)}
+              placeholder="Paste Trello Token or OAuth Access Token"
+              className="bg-background border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Get your Power-Up API Key & Token from trello.com/power-ups/admin.
+            </p>
+            <button
+              type="submit"
+              disabled={connectingToken || !tokenInput.trim()}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5 flex-shrink-0"
+            >
+              {connectingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              Connect Trello
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

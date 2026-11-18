@@ -1,25 +1,44 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  BarChart3,
+  Activity,
+  BookmarkPlus,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   ChevronsLeft,
+  Compass,
+  Globe,
+  KeyRound,
+  LayoutTemplate,
+  Loader2,
+  Lock,
   MessageSquare,
+  Pencil,
   Send,
-  Settings2,
+  Sliders,
+  Sparkles,
   Trash2,
   Users,
-  X,
-  Loader2,
-  CheckCircle2,
-  Compass,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { dateLocale } from '@/i18n/format';
-import { Priority, Task, TaskActivity } from '@/types/board';
+import { Priority, Task, TaskActivity, TaskComment, TaskTemplate } from '@/types/board';
 import { toast } from '@/hooks/use-toast';
+import { DEFAULT_TEMPLATE_TAGS } from '../../../shared/defaultTemplates';
+import {
+  fetchTemplates as fetchTaskTemplates,
+  fetchTemplateByCode as fetchTaskTemplateByCode,
+  createTemplate as createTaskTemplate,
+} from '@/services/taskTemplateService';
+import {
+  fetchNoteTemplates,
+  fetchNoteTemplateByCode,
+  createNoteTemplate,
+} from '@/services/noteTemplateService';
+import CopyShareCode from '@/components/CopyShareCode';
+import { getTaskAssignees } from '@/components/shared/AssignedBadge';
 
 interface ProjectMemberCandidate {
   id: number;
@@ -33,7 +52,8 @@ interface TaskSideViewPanelProps {
   task: Task;
   open: boolean;
   onHide: () => void;
-  onCloseSide: () => void;
+  onCloseSide?: () => void;
+  onCloseModal?: () => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   activityEntries: TaskActivity[];
 }
@@ -43,30 +63,64 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
   task,
   open,
   onHide,
-  onCloseSide,
+  onCloseModal,
   onUpdateTask,
   activityEntries,
 }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const [templatesCollapsed, setTemplatesCollapsed] = useState(false);
+  const [templateTab, setTemplateTab] = useState<'apply' | 'save'>('apply');
+  const [myTemplates, setMyTemplates] = useState<TaskTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [shareCodeInput, setShareCodeInput] = useState('');
+  const [redeemingCode, setRedeemingCode] = useState(false);
+
+  // Save-as-template form state
+  const [tmplName, setTmplName] = useState(task.title || '');
+  const [tmplPublic, setTmplPublic] = useState(false);
+  const [tmplTags, setTmplTags] = useState<string[]>([]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savedShareCode, setSavedShareCode] = useState<string | null>(null);
+
+  // Comments & Activity state
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [commentsCollapsed, setCommentsCollapsed] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
 
-  // Project "Apply to other users" state (strictly visible ONLY when Boolean(task.projectId))
-  const [applyUsersOpen, setApplyUsersOpen] = useState(false);
+  // Project Member Assignment state (strictly visible when inside a project)
+  const [assignCollapsed, setAssignCollapsed] = useState(false);
   const [projectMembers, setProjectMembers] = useState<ProjectMemberCandidate[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
-  const [selectedRecipientIds, setSelectedRecipientIds] = useState<number[]>([]);
-  const [applyingToUsers, setApplyingToUsers] = useState(false);
 
   useEffect(() => {
-    setApplyUsersOpen(false);
-    setSelectedRecipientIds([]);
-    if (!task.projectId) {
+    setTmplName(task.title || `My ${kind} template`);
+    setSavedShareCode(null);
+  }, [task.id, task.title, kind]);
+
+  const loadMyTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const list = kind === 'note' ? await fetchNoteTemplates() : await fetchTaskTemplates();
+      setMyTemplates(Array.isArray(list) ? list : []);
+    } catch {
+      setMyTemplates([]);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      void loadMyTemplates();
+    }
+  }, [open, kind]);
+
+  useEffect(() => {
+    if (!open || !task.projectId) {
       setProjectMembers([]);
       return;
     }
@@ -77,10 +131,15 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
       .then(data => {
         if (cancelled) return;
         const raw = data?.project?.members || data?.members || [];
-        const others = Array.isArray(raw)
-          ? raw.filter((m: any) => Number(m.id) !== Number(user?.id))
+        const allMembers = Array.isArray(raw)
+          ? raw.map((m: any) => ({
+              id: Number(m.id ?? m.userId),
+              name: m.name || m.email || 'Member',
+              email: m.email || '',
+              role: m.role || 'editor',
+            }))
           : [];
-        setProjectMembers(others);
+        setProjectMembers(allMembers);
       })
       .catch(() => {
         if (!cancelled) setProjectMembers([]);
@@ -91,153 +150,260 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [task.id, task.projectId, user?.id]);
+  }, [open, task.projectId]);
+
+  const assignedMembers = useMemo(() => getTaskAssignees(task), [task]);
+  const assignedIdSet = useMemo(() => new Set(assignedMembers.map(a => a.id)), [assignedMembers]);
+
+  if (!open) return null;
+
+  const isCommentOwner = (comment: TaskComment): boolean => {
+    if (user?.id == null) return false;
+    if (comment.authorId != null) return comment.authorId === user.id;
+    // Legacy personal comments (not in a shared project) remain editable by the current user
+    return !task.projectId;
+  };
 
   const addComment = () => {
-    if (!newCommentText.trim()) return;
+    const trimmed = newCommentText.trim();
+    if (!trimmed) return;
+    const authorName = user?.name || user?.email?.split('@')[0] || 'You';
     onUpdateTask(task.id, {
       comments: [
         ...(task.comments || []),
         {
           id: crypto.randomUUID(),
-          text: newCommentText.trim(),
+          text: trimmed,
           createdAt: new Date().toISOString(),
+          authorId: user?.id,
+          authorName,
+          authorEmail: user?.email,
         },
       ],
     });
     setNewCommentText('');
   };
 
-  const deleteComment = (commentId: string) => {
+  const deleteComment = (comment: TaskComment) => {
+    if (!isCommentOwner(comment)) {
+      toast({
+        title: 'Permission denied',
+        description: 'Only the author of a comment can delete it.',
+        variant: 'destructive',
+      });
+      return;
+    }
     onUpdateTask(task.id, {
-      comments: (task.comments || []).filter(c => c.id !== commentId),
+      comments: (task.comments || []).filter(c => c.id !== comment.id),
     });
   };
 
-  const updateComment = (commentId: string, text: string) => {
+  const updateComment = (comment: TaskComment, text: string) => {
+    if (!isCommentOwner(comment)) {
+      toast({
+        title: 'Permission denied',
+        description: 'Only the author of a comment can edit it.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) return;
     onUpdateTask(task.id, {
       comments: (task.comments || []).map(c =>
-        c.id === commentId ? { ...c, text } : c,
+        c.id === comment.id
+          ? { ...c, text: trimmed, updatedAt: new Date().toISOString() }
+          : c,
       ),
     });
   };
 
-  const handleApplyToUsers = async () => {
-    if (!task.projectId || selectedRecipientIds.length === 0 || applyingToUsers) return;
-    setApplyingToUsers(true);
-    try {
-      const res = await fetch(`/api/projects/${task.projectId}/apply-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          kind,
-          targetUserIds: selectedRecipientIds,
-          item: {
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            priority: task.priority,
-            status: task.status,
-            columnId: task.columnId,
-            duration: task.duration,
-            startDate: task.startDate,
-            startTime: task.startTime,
-            dueDate: task.dueDate,
-            dueTime: task.dueTime,
-            labels: task.labels,
-            subtasks: task.subtasks,
-            checklists: task.checklists,
-            comments: task.comments,
-            activityLog: task.activityLog,
-          },
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast({
-          title: `Applied ${kind} to ${data.appliedCount || selectedRecipientIds.length} member(s)`,
-          description: `Recipients will find this ${kind} on their project board and in notifications.`,
-        });
-        setApplyUsersOpen(false);
-        setSelectedRecipientIds([]);
-      } else {
-        toast({
-          title: 'Failed to apply',
-          description: data.error || 'Could not apply to selected users.',
-          variant: 'destructive',
-        });
+  const handleToggleMemberAssignment = (member: ProjectMemberCandidate) => {
+    const currentlyAssigned = assignedIdSet.has(member.id);
+    const nextList = currentlyAssigned
+      ? assignedMembers.filter(a => a.id !== member.id)
+      : [...assignedMembers, { id: member.id, name: member.name }];
+
+    const primary = nextList[0] || null;
+    const actor = user?.name || user?.email?.split('@')[0] || 'Member';
+    const nextActivity: TaskActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      text: currentlyAssigned
+        ? `${actor} unassigned ${member.name}`
+        : `${actor} assigned ${member.name}`,
+      createdAt: new Date().toISOString(),
+      actor,
+    };
+
+    onUpdateTask(task.id, {
+      assignedToUsers: nextList,
+      assignedToUserIds: nextList.map(m => m.id),
+      assignedToUserId: primary ? primary.id : null,
+      assignedToUserName: primary ? primary.name : null,
+      activityLog: [nextActivity, ...(task.activityLog || [])],
+    });
+  };
+
+  const applyTemplateObject = (tmpl: Partial<TaskTemplate>) => {
+    const newSubtasks = (tmpl.subtasks || []).map((st: any) => ({
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      text: st.text || '',
+      completed: false,
+      durationMinutes: st.durationMinutes || 0,
+    }));
+    const newChecklists = (tmpl.checklists || []).map((cl: any) => ({
+      id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: cl.title || 'Checklist',
+      items: (cl.items || []).map((item: any) => ({
+        id: `ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text: item.text || '',
+        completed: false,
+      })),
+    }));
+    const tmplBody = (tmpl as any).description || (tmpl as any).content || '';
+    const existingLabels = task.labels || [];
+    const incomingLabels = Array.isArray((tmpl as any).labels) ? (tmpl as any).labels : [];
+    const mergedLabels = [...existingLabels];
+    incomingLabels.forEach((lbl: any) => {
+      if (lbl?.name && !mergedLabels.some(l => l.name.toLowerCase() === String(lbl.name).toLowerCase())) {
+        mergedLabels.push({ ...lbl, id: lbl.id || `lbl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
       }
-    } catch {
+    });
+
+    onUpdateTask(task.id, {
+      title: !task.title?.trim() && tmpl.title ? tmpl.title : task.title,
+      description: tmplBody
+        ? task.description?.trim()
+          ? `${task.description}\n\n${tmplBody}`
+          : tmplBody
+        : task.description,
+      priority: task.priority === 'none' && tmpl.priority ? (tmpl.priority as Priority) : task.priority,
+      duration: task.duration || tmpl.duration || 0,
+      labels: mergedLabels,
+      subtasks: [...(task.subtasks || []), ...newSubtasks],
+      checklists: [...(task.checklists || []), ...newChecklists],
+    });
+
+    toast({
+      title: 'Template applied',
+      description: `"${tmpl.name || tmpl.title || 'Template'}" added to this ${kind}.`,
+    });
+  };
+
+  const handleSaveAsTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = tmplName.trim();
+    if (!cleanName || savingTemplate) return;
+    setSavingTemplate(true);
+    try {
+      const payload: any = {
+        name: cleanName,
+        title: task.title || cleanName,
+        description: task.description || '',
+        content: task.description || '',
+        priority: task.priority || 'medium',
+        duration: task.duration || null,
+        labels: task.labels || [],
+        tags: task.labels || [],
+        subtasks: (task.subtasks || []).map(st => ({
+          text: st.text,
+          durationMinutes: st.durationMinutes || 0,
+        })),
+        checklists: (task.checklists || []).map(cl => ({
+          id: cl.id,
+          title: cl.title,
+          items: (cl.items || []).map(it => ({ id: it.id, text: it.text })),
+        })),
+        templateTags: tmplTags,
+        isPublic: tmplPublic,
+      };
+      const created = kind === 'note'
+        ? await createNoteTemplate(payload)
+        : await createTaskTemplate(payload);
+      setSavedShareCode((created as any).shareCode || null);
+      await loadMyTemplates();
+      setTemplateTab('apply');
       toast({
-        title: 'Network error',
-        description: 'Could not reach server to apply this item.',
+        title: 'Template saved',
+        description: tmplPublic
+          ? 'Saved publicly and share code generated!'
+          : 'Saved privately to My Templates.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not save template',
+        description: err?.message || 'Try again in a moment.',
         variant: 'destructive',
       });
     } finally {
-      setApplyingToUsers(false);
+      setSavingTemplate(false);
     }
+  };
+
+  const handleRedeemCode = async () => {
+    const clean = shareCodeInput.trim().toUpperCase();
+    if (!clean || redeemingCode) return;
+    setRedeemingCode(true);
+    try {
+      const found = kind === 'note'
+        ? await fetchNoteTemplateByCode(clean)
+        : await fetchTaskTemplateByCode(clean);
+      applyTemplateObject(found);
+      setShareCodeInput('');
+    } catch (err: any) {
+      toast({
+        title: 'Code not found',
+        description: err?.message || `Enter a valid ${kind} template share code.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setRedeemingCode(false);
+    }
+  };
+
+  const handleBrowseTemplates = () => {
+    onCloseModal?.();
+    navigate(`/settings?tab=templates&type=${kind}&applyTo=${encodeURIComponent(task.id)}`);
   };
 
   return (
     <aside
-      aria-hidden={!open}
-      className={`relative bg-card border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ease-in-out flex flex-col ${
-        open
-          ? 'w-full lg:w-96 opacity-100 border lg:max-h-[92vh]'
-          : 'w-0 h-0 lg:w-0 opacity-0 border-0 pointer-events-none'
-      }`}
+      data-testid="task-side-view-panel"
+      className="w-full md:w-[360px] lg:w-[400px] flex-shrink-0 border-t md:border-t-0 md:border-l border-border bg-muted/15 flex flex-col max-h-[48vh] md:max-h-full overflow-hidden animate-fade-in"
+      onClick={e => e.stopPropagation()}
     >
-      {/* Top Side-View Header with Hide/Collapse left and Close buttons */}
-      <div className="px-4 py-3.5 border-b border-border flex items-center justify-between gap-2 sticky top-0 bg-card z-10 flex-shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Settings2 className="w-4 h-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">
-              {kind === 'note' ? 'Note Settings' : 'Task Settings'}
-            </h3>
-            <p className="text-[11px] text-muted-foreground truncate">
-              Controls, comments & activity
-            </p>
-          </div>
+      {/* Side Panel Header — Hide side view control only */}
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 bg-card/70 flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <Sliders className="w-4 h-4 text-primary flex-shrink-0" />
+          <span className="text-xs font-black uppercase tracking-wider text-foreground truncate">
+            Side View
+          </span>
         </div>
-
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onHide}
-            title="Collapse side panel"
-            aria-label="Hide side panel"
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onCloseSide}
-            title="Close side panel"
-            aria-label="Close side panel"
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onHide}
+          title="Hide side view"
+          aria-label="Hide side view"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Hide</span>
+        </button>
       </div>
 
-      {/* Scrollable Body */}
-      <div className="p-4 space-y-5 overflow-y-auto flex-1 min-h-0">
-        {/* Settings Controls Section */}
-        <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3.5">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Quick Settings */}
+        <div className="space-y-2 rounded-xl border border-border bg-card/60 p-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Quick Settings
             </span>
             <button
               type="button"
               onClick={() => onUpdateTask(task.id, { completed: !task.completed })}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
                 task.completed
                   ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : 'border-border bg-card text-muted-foreground hover:text-foreground'
@@ -247,140 +413,335 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
               {task.completed ? 'Completed' : 'Mark Complete'}
             </button>
           </div>
-
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold text-muted-foreground block">Priority</span>
-            <div className="flex flex-wrap gap-1">
-              {(['urgent', 'high', 'medium', 'low', 'none'] as Priority[]).map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => onUpdateTask(task.id, { priority: p })}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-semibold capitalize border transition-all ${
-                    task.priority === p
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-xs font-medium text-muted-foreground">Priority</span>
+            <select
+              value={task.priority}
+              onChange={e => onUpdateTask(task.id, { priority: e.target.value as Priority })}
+              className="text-xs font-semibold bg-background border border-border rounded-lg px-2.5 py-1 text-foreground outline-none focus:border-primary"
+            >
+              <option value="none">None</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </div>
-
-          <button
-            type="button"
-            onClick={() => navigate(`/templates?type=${kind}&applyTo=${encodeURIComponent(task.id)}`)}
-            className="w-full py-2 px-3 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground flex items-center justify-center gap-1.5 transition-colors"
-          >
-            <Compass className="w-3.5 h-3.5 text-primary" />
-            Browse Templates to Apply
-          </button>
         </div>
 
-        {/* Apply to Other Users — ONLY when inside a project */}
+        {/* Assign Project Members — ONLY when inside a project */}
         {Boolean(task.projectId) && (
-          <div className="space-y-2.5 rounded-xl border border-primary/25 bg-primary/5 p-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary" />
-                <div>
-                  <h4 className="text-xs font-bold text-foreground">Project Collaboration</h4>
-                  <p className="text-[10px] text-muted-foreground">
-                    Copy & assign this {kind} to teammates in this project
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <div className="rounded-xl border border-primary/25 bg-primary/5 overflow-hidden transition-all">
             <button
               type="button"
-              onClick={() => setApplyUsersOpen(prev => !prev)}
-              className="w-full py-2 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5"
+              onClick={() => setAssignCollapsed(p => !p)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
             >
-              <Send className="w-3.5 h-3.5" />
-              Apply {kind} to other users
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-foreground">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                Assign Members ({assignedMembers.length})
+              </span>
+              {assignCollapsed ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              )}
             </button>
 
-            {applyUsersOpen && (
-              <div className="pt-2 space-y-2 border-t border-primary/20">
+            {!assignCollapsed && (
+              <div className="px-3.5 pb-3.5 pt-1 border-t border-primary/15 space-y-2">
                 {loadingMembers ? (
                   <div className="flex items-center justify-center py-3 text-xs text-muted-foreground gap-1.5">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading project members…
                   </div>
                 ) : projectMembers.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground italic">
-                    No other members in this project yet. Invite teammates on the Projects page first.
+                    No project members found yet. Invite teammates on the Users tab.
                   </p>
                 ) : (
-                  <>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-foreground">
-                        Select project members ({selectedRecipientIds.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedRecipientIds(
-                            selectedRecipientIds.length === projectMembers.length
-                              ? []
-                              : projectMembers.map(m => m.id),
-                          )
-                        }
-                        className="text-primary font-semibold hover:underline"
-                      >
-                        {selectedRecipientIds.length === projectMembers.length ? 'Clear all' : 'Select all'}
-                      </button>
-                    </div>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {projectMembers.map(m => {
-                        const checked = selectedRecipientIds.includes(m.id);
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() =>
-                              setSelectedRecipientIds(prev =>
-                                prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id],
-                              )
-                            }
-                            className={`w-full px-2.5 py-2 rounded-xl border text-left text-xs flex items-center justify-between gap-2 transition-colors ${
-                              checked
-                                ? 'border-primary bg-card text-foreground'
-                                : 'border-border/70 bg-card/70 text-muted-foreground hover:text-foreground'
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <p className="font-semibold text-foreground truncate">{m.name}</p>
-                              <p className="text-[10px] text-muted-foreground truncate">{m.email}</p>
-                            </div>
+                  <div className="space-y-1 max-h-44 overflow-y-auto pr-0.5">
+                    {projectMembers.map(member => {
+                      const isAssigned = assignedIdSet.has(member.id);
+                      const isMe = member.id === user?.id;
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => handleToggleMemberAssignment(member)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl border text-left transition-all ${
+                            isAssigned
+                              ? 'border-primary bg-primary/15 text-foreground shadow-xs ring-1 ring-primary/25'
+                              : 'border-border bg-card/80 text-foreground hover:bg-muted/60 hover:border-border/80'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
                             <span
-                              className={`w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 ${
-                                checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border'
+                              className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0 ${
+                                isAssigned
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground'
                               }`}
                             >
-                              {checked && <Check className="w-3 h-3" />}
+                              {member.name.trim().slice(0, 1).toUpperCase()}
                             </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={selectedRecipientIds.length === 0 || applyingToUsers}
-                      onClick={() => void handleApplyToUsers()}
-                      className="w-full py-2 rounded-xl bg-foreground text-background text-xs font-bold hover:opacity-90 disabled:opacity-50"
-                    >
-                      {applyingToUsers
-                        ? 'Applying…'
-                        : `Send to ${selectedRecipientIds.length || ''} Selected Member${selectedRecipientIds.length === 1 ? '' : 's'}`}
-                    </button>
-                  </>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">
+                                {member.name}
+                                {isMe && (
+                                  <span className="ml-1 text-[10px] font-semibold text-primary">(You)</span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground capitalize truncate">
+                                {member.role}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                              isAssigned
+                                ? 'bg-primary text-primary-foreground scale-100'
+                                : 'border border-border bg-background/60 text-transparent'
+                            }`}
+                          >
+                            <Check className="w-3 h-3" />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
+                <p className="text-[10px] text-muted-foreground">
+                  Click any team member to highlight and assign them to this {kind}.
+                </p>
               </div>
             )}
           </div>
         )}
+
+        {/* Templates Section — Directly Above Comments */}
+        <div className="rounded-xl border border-border bg-card/70 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setTemplatesCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-3.5 py-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <LayoutTemplate className="w-3.5 h-3.5 text-primary" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Templates ({myTemplates.length})
+              </h3>
+            </div>
+            {templatesCollapsed ? (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+
+          {!templatesCollapsed && (
+            <div className="border-t border-border p-3 space-y-3">
+              {/* Sub-mode switcher: Apply vs Turn into Template */}
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-muted/50 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab('apply')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                    templateTab === 'apply'
+                      ? 'bg-card text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3 text-primary" />
+                  Apply Template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab('save')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                    templateTab === 'save'
+                      ? 'bg-card text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <BookmarkPlus className="w-3 h-3 text-primary" />
+                  Turn Into Template
+                </button>
+              </div>
+
+              {templateTab === 'apply' ? (
+                <div className="space-y-2.5">
+                  {loadingTemplates ? (
+                    <div className="flex items-center justify-center py-4 text-xs text-muted-foreground gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading your templates…
+                    </div>
+                  ) : myTemplates.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center space-y-1.5">
+                      <p className="text-xs font-semibold text-foreground">No saved {kind} templates yet</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Turn this {kind} into a reusable template or browse community defaults.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                      {myTemplates.map(tmpl => (
+                        <div
+                          key={tmpl.id}
+                          className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-background/80 hover:border-primary/40 transition-all"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-foreground truncate">
+                                {tmpl.name}
+                              </span>
+                              {tmpl.isPublic ? (
+                                <span title="Public template" className="inline-flex flex-shrink-0">
+                                  <Globe className="w-3 h-3 text-emerald-500" />
+                                </span>
+                              ) : (
+                                <span title="Private template" className="inline-flex flex-shrink-0">
+                                  <Lock className="w-3 h-3 text-amber-500" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {(tmpl.subtasks?.length || 0)} subtasks · {(tmpl.checklists?.length || 0)} checklists
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => applyTemplateObject(tmpl)}
+                            className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground text-[11px] font-bold transition-all flex-shrink-0"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Quick Share Code Redeem */}
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <KeyRound className="w-3 h-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={shareCodeInput}
+                        onChange={e => setShareCodeInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && void handleRedeemCode()}
+                        placeholder={`Paste ${kind} share code…`}
+                        className="w-full bg-background border border-border rounded-lg pl-7 pr-2.5 py-1.5 text-[11px] text-foreground outline-none focus:border-primary"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!shareCodeInput.trim() || redeemingCode}
+                      onClick={() => void handleRedeemCode()}
+                      className="px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-bold text-foreground disabled:opacity-50"
+                    >
+                      {redeemingCode ? '…' : 'Use'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSaveAsTemplate} className="space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Template Name
+                    </label>
+                    <input
+                      type="text"
+                      value={tmplName}
+                      onChange={e => setTmplName(e.target.value)}
+                      placeholder={`Name your ${kind} template…`}
+                      className="w-full mt-1 bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Visibility
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setTmplPublic(false)}
+                        className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                          !tmplPublic
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <Lock className="w-3 h-3" /> Private
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTmplPublic(true)}
+                        className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                          tmplPublic
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <Globe className="w-3 h-3" /> Public
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Tags (optional)
+                    </label>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {DEFAULT_TEMPLATE_TAGS.slice(0, 6).map(tag => {
+                        const active = tmplTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() =>
+                              setTmplTags(prev =>
+                                prev.includes(tag) ? prev.filter(t => t !== tag) : prev.length < 4 ? [...prev, tag] : prev,
+                              )
+                            }
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all ${
+                              active
+                                ? 'border-primary bg-primary/15 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!tmplName.trim() || savingTemplate}
+                    className="w-full py-2 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {savingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
+                    Save Current {kind === 'note' ? 'Note' : 'Task'} as Template
+                  </button>
+                  {savedShareCode && (
+                    <div className="pt-1 flex items-center justify-between gap-2 text-[11px] bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1.5">
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">Share code:</span>
+                      <CopyShareCode code={savedShareCode} size="sm" />
+                    </div>
+                  )}
+                </form>
+              )}
+
+              {/* Browse all Templates in Settings */}
+              <button
+                type="button"
+                onClick={handleBrowseTemplates}
+                className="w-full py-2 px-3 rounded-xl border border-primary/25 bg-primary/5 hover:bg-primary/10 text-xs font-bold text-primary flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                Browse All Templates
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Comments Section */}
         <div className="rounded-xl border border-border bg-muted/20">
@@ -390,7 +751,7 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
             className="w-full flex items-center justify-between px-3.5 py-2.5"
           >
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-muted-foreground" />
+              <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
                 Comments ({(task.comments || []).length})
               </h3>
@@ -403,54 +764,116 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
           </button>
 
           {!commentsCollapsed && (
-            <div className="border-t border-border/60 p-3 space-y-2.5">
-              <div className="space-y-2 max-h-52 overflow-y-auto">
-                {(task.comments || []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No comments yet.</p>
-                ) : (
-                  (task.comments || []).map(comment => (
-                    <div
-                      key={comment.id}
-                      className="border border-border rounded-xl bg-card px-3 py-2 group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        {editingCommentId === comment.id ? (
+            <div className="border-t border-border p-3 space-y-2.5">
+              {(task.comments || []).length === 0 ? (
+                <p className="text-xs text-muted-foreground/70 italic">No comments yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {(task.comments || []).map(comment => {
+                    const editable = isCommentOwner(comment);
+                    const displayAuthor =
+                      comment.authorName ||
+                      (comment.authorId === user?.id ? user?.name || 'You' : task.projectId ? 'Project Member' : user?.name || 'You');
+                    const isSelf = comment.authorId != null && comment.authorId === user?.id;
+                    return (
+                      <div
+                        key={comment.id}
+                        className="group rounded-xl border border-border bg-background/85 px-3 py-2 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-black flex items-center justify-center flex-shrink-0">
+                              {displayAuthor.trim().slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="text-[11px] font-bold text-foreground truncate">
+                              {displayAuthor}
+                              {isSelf && <span className="text-primary font-semibold ml-1">(You)</span>}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {editable ? (
+                              <>
+                                <button
+                                  type="button"
+                                  title="Edit comment"
+                                  onClick={() => {
+                                    setEditingCommentId(comment.id);
+                                    setEditingCommentText(comment.text);
+                                  }}
+                                  className="p-1 text-muted-foreground hover:text-primary opacity-75 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete comment"
+                                  onClick={() => deleteComment(comment)}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-75 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </>
+                            ) : (
+                              <span
+                                title="Only the comment author can edit this comment"
+                                className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground/70"
+                              >
+                                <Lock className="w-2.5 h-2.5" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {editable && editingCommentId === comment.id ? (
                           <textarea
                             autoFocus
-                            className="flex-1 bg-muted/40 border border-primary/30 rounded px-2 py-1 text-xs resize-none"
+                            rows={2}
                             value={editingCommentText}
                             onChange={e => setEditingCommentText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                updateComment(comment, editingCommentText);
+                                setEditingCommentId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingCommentId(null);
+                              }
+                            }}
                             onBlur={() => {
-                              updateComment(comment.id, editingCommentText);
+                              updateComment(comment, editingCommentText);
                               setEditingCommentId(null);
                             }}
+                            className="w-full bg-background border border-primary/40 rounded-md px-2 py-1 text-xs text-foreground outline-none resize-none"
                           />
                         ) : (
                           <p
                             onClick={() => {
+                              if (!editable) return;
                               setEditingCommentId(comment.id);
                               setEditingCommentText(comment.text);
                             }}
-                            className="text-xs text-foreground whitespace-pre-wrap flex-1 cursor-text"
+                            className={`text-xs text-foreground whitespace-pre-wrap break-words ${
+                              editable ? 'cursor-text' : 'cursor-default'
+                            }`}
                           >
                             {comment.text}
                           </p>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => deleteComment(comment.id)}
-                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+
+                        <span className="block text-[10px] text-muted-foreground/75">
+                          {new Date(comment.createdAt).toLocaleString(dateLocale(), {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          {comment.updatedAt ? ' · edited' : ''}
+                        </span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {new Date(comment.createdAt).toLocaleString(dateLocale())}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="flex gap-1.5">
                 <input
@@ -464,9 +887,10 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
                   type="button"
                   onClick={addComment}
                   disabled={!newCommentText.trim()}
-                  className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-semibold"
+                  className="px-2.5 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                  title="Send comment"
                 >
-                  Send
+                  <Send className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -481,7 +905,7 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
             className="w-full flex items-center justify-between px-3.5 py-2.5"
           >
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-muted-foreground" />
+              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
                 Activity Log ({activityEntries.length})
               </h3>
@@ -494,21 +918,21 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
           </button>
 
           {!activityCollapsed && (
-            <div className="border-t border-border/60 p-3 space-y-2 max-h-56 overflow-y-auto">
+            <div className="border-t border-border p-3 space-y-2 max-h-52 overflow-y-auto">
               {activityEntries.map(entry => (
-                <div
-                  key={entry.id}
-                  className="rounded-xl border border-border/60 bg-card px-3 py-2"
-                >
-                  <p className="text-xs text-foreground">{entry.text}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {entry.actor && (
-                      <>
-                        <span className="font-semibold">{entry.actor}</span> ·{' '}
-                      </>
-                    )}
-                    {new Date(entry.createdAt).toLocaleString(dateLocale())}
-                  </p>
+                <div key={entry.id} className="text-xs flex items-start gap-2 text-foreground/85">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="break-words">{entry.text}</p>
+                    <p className="text-[10px] text-muted-foreground/75 mt-0.5">
+                      {new Date(entry.createdAt).toLocaleString(dateLocale(), {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -520,4 +944,3 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
 };
 
 export default TaskSideViewPanel;
-

@@ -9,6 +9,8 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
+import { AssignedBadge } from '@/components/shared/AssignedBadge';
+import { startPlannerItemDrag, endPlannerItemDrag } from '@/lib/plannerDrag';
 import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
@@ -546,14 +548,10 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
         key={task.id}
         draggable={true}
         onDragStart={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, textarea, select')) return;
           const colName = board.columns.find(c => c.id === task.columnId)?.title;
-          const itemData = JSON.stringify({ type: 'task', id: task.id, title: task.title, column: colName });
-          e.dataTransfer.setData('application/x-planner-item', itemData);
-          e.dataTransfer.setData('text/plain', itemData);
-          e.dataTransfer.effectAllowed = 'copyLink';
+          startPlannerItemDrag(e, { type: 'task', id: task.id, title: task.title, column: colName });
         }}
+        onDragEnd={endPlannerItemDrag}
         onClick={() => onTaskClick(task)}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDragging
@@ -671,6 +669,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <AssignedBadge task={task} currentUserId={user?.id} />
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
@@ -788,14 +787,10 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
       <div
         draggable={true}
         onDragStart={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, textarea, select')) return;
           const colName = board.columns.find(c => c.id === note.columnId)?.title;
-          const itemData = JSON.stringify({ type: 'note', id: note.id, title: note.title, column: colName });
-          e.dataTransfer.setData('application/x-planner-item', itemData);
-          e.dataTransfer.setData('text/plain', itemData);
-          e.dataTransfer.effectAllowed = 'copyLink';
+          startPlannerItemDrag(e, { type: 'note', id: note.id, title: note.title, column: colName });
         }}
+        onDragEnd={endPlannerItemDrag}
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note as any); }}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDraggingRow
@@ -853,6 +848,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <AssignedBadge task={note} currentUserId={user?.id} />
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
@@ -973,30 +969,48 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                       return null;
                     }}
                   >
-                    {(dropProvided) => (
-                      <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5 min-h-[40px]">
-                        {!isColumnCollapsed && combinedActive.map((entry, taskIndex) => (
-                          <Draggable key={entry.item.id} draggableId={entry.item.id} index={taskIndex}>
-                            {(taskProvided, taskSnapshot) => (
-                              <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                                {entry.kind === 'task'
-                                  ? renderTaskRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)
-                                  : renderNoteRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {isColumnCollapsed && isDragging && (
-                          <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
-                            Drop here to move into {column.title}
-                          </div>
-                        )}
-                        {dropProvided.placeholder}
-                      </div>
-                    )}
+                    {(dropProvided) => {
+                      const hasCompleted = columnCompleted.length > 0 || colNotesCompleted.length > 0;
+                      const hasActiveVisible = !isColumnCollapsed && combinedActive.length > 0;
+                      return (
+                        <div
+                          ref={dropProvided.innerRef}
+                          {...dropProvided.droppableProps}
+                          className={`pl-3 ${
+                            isDragging
+                              ? 'min-h-[40px]'
+                              : (!isColumnCollapsed && combinedActive.length === 0 && !hasCompleted)
+                                ? 'min-h-[24px]'
+                                : 'min-h-0'
+                          }`}
+                        >
+                          {hasActiveVisible && (
+                            <div className="space-y-1.5">
+                              {combinedActive.map((entry, taskIndex) => (
+                                <Draggable key={entry.item.id} draggableId={entry.item.id} index={taskIndex}>
+                                  {(taskProvided, taskSnapshot) => (
+                                    <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                      {entry.kind === 'task'
+                                        ? renderTaskRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)
+                                        : renderNoteRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                            </div>
+                          )}
+                          {isColumnCollapsed && isDragging && (
+                            <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                              Drop here to move into {column.title}
+                            </div>
+                          )}
+                          {dropProvided.placeholder}
+                        </div>
+                      );
+                    }}
                   </Droppable>
                 {(!isColumnCollapsed || isDragging) && (columnCompleted.length > 0 || colNotesCompleted.length > 0 || isDragging) && (
-                  <div className="pl-3 mt-1.5">
+                  <div className={`pl-3 ${(!isColumnCollapsed && combinedActive.length > 0) ? 'mt-1.5' : ''}`}>
                     <Droppable droppableId={'completed-' + column.id}>
                       {(completedProvided, completedSnapshot) => (
                         <div

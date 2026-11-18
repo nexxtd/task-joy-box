@@ -604,6 +604,20 @@ export async function initDatabase() {
     `);
     console.log('Milestones table verified');
 
+    // --- PROJECT MEMBER NOTES TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_member_notes (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        target_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS project_member_notes_target_idx ON project_member_notes(project_id, target_user_id);
+    `);
+
     // --- COUPON NEW COLUMNS ---
     await addColumnIfNotExists('coupons', 'restricted_to_plan', 'TEXT');
     await addColumnIfNotExists('coupons', 'start_date', 'TEXT');
@@ -1088,7 +1102,7 @@ export async function initDatabase() {
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
       'task_templates', 'note_templates', 'goal_templates', 'habit_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
-      'pending_payments', 'documents', 'connected_accounts',
+      'pending_payments', 'documents', 'connected_accounts', 'project_member_notes',
       // Server-only auth/secret tables flagged by Supabase linter
       // (0013 rls_disabled_in_public, 0023 sensitive_columns_exposed).
       // No permissive policies: app connects as table owner (RLS bypassed),

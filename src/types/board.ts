@@ -43,6 +43,10 @@ export interface TaskComment {
   id: string;
   text: string;
   createdAt: string;
+  authorId?: number;
+  authorName?: string;
+  authorEmail?: string;
+  updatedAt?: string;
 }
 
 export interface TaskActivity {
@@ -52,11 +56,20 @@ export interface TaskActivity {
   actor?: string;
 }
 
+export interface AssignedMemberRef {
+  id: number;
+  name: string;
+}
+
 export interface Task {
   id: string;
   title: string;
   description: string;
   status?: TaskStatus;
+  assignedToUserId?: number | null;
+  assignedToUserName?: string | null;
+  assignedToUserIds?: number[];
+  assignedToUsers?: AssignedMemberRef[];
   priority: Priority;
   labels: Label[];
   checklists: Checklist[];

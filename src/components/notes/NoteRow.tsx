@@ -2,6 +2,8 @@ import { dateLocale } from '@/i18n/format';
 import React, { useState } from 'react';
 import { Pin, Tag, Trash2, ChevronUp, ChevronDown, GripVertical, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AssignedBadge } from '@/components/shared/AssignedBadge';
+import { startPlannerItemDrag, endPlannerItemDrag } from '@/lib/plannerDrag';
 
 interface NoteTag { id: number; name: string; color: string; }
 interface Note {
@@ -57,13 +59,9 @@ const NoteRow: React.FC<NoteRowProps> = ({
     <div
       draggable={true}
       onDragStart={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('button, input, textarea, select')) return;
-        const itemData = JSON.stringify({ type: 'note', id: String(note.id), title: note.title });
-        e.dataTransfer.setData('application/x-planner-item', itemData);
-        e.dataTransfer.setData('text/plain', itemData);
-        e.dataTransfer.effectAllowed = 'copyLink';
+        startPlannerItemDrag(e, { type: 'note', id: String(note.id), title: note.title });
       }}
+      onDragEnd={endPlannerItemDrag}
       className={cn(
         'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
         isDeleteMode
@@ -125,6 +123,7 @@ const NoteRow: React.FC<NoteRowProps> = ({
           <span className="text-[10px] text-muted-foreground">
             {new Date(note.updatedAt || note.createdAt).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}
           </span>
+          <AssignedBadge task={note as any} />
           <button
             onClick={e => { e.stopPropagation(); onToggleExpand(); }}
             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"

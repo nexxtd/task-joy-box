@@ -43,6 +43,7 @@ const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'go-pricing', label: 'Go to Pricing', kind: 'navigate', path: '/pricing', category: 'pages', description: 'View plans and upgrade' },
   { id: 'go-settings', label: 'Go to Settings', kind: 'navigate', path: '/settings', category: 'pages', description: 'Open app settings' },
   // ---- Create ----
+  { id: 'global-search', label: 'Open Global Search', kind: 'command', category: 'pages', description: 'Search tasks, notes, projects, milestones & templates' },
   { id: 'create-task', label: 'Create Task', kind: 'command', path: '/tasks?create=1', category: 'create', description: 'Open the new-task form' },
   { id: 'create-note', label: 'Create Note', kind: 'command', path: '/notes?create=1', category: 'create', description: 'Open the new-note form' },
   { id: 'new-ai-chat', label: 'New AI Chat', kind: 'command', path: '/ai-chat?new=1', category: 'create', description: 'Start a fresh AI conversation' },
@@ -52,6 +53,7 @@ const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'settings-energy', label: 'Settings: Energy', kind: 'navigate', path: '/settings?section=energy', category: 'settings', description: 'Energy tracker and insights' },
   { id: 'settings-history', label: 'Settings: History', kind: 'navigate', path: '/settings?section=history', category: 'settings', description: 'Energy and focus history' },
   { id: 'settings-shortcuts', label: 'Settings: Shortcuts', kind: 'navigate', path: '/settings?section=shortcuts', category: 'settings', description: 'Manage keyboard shortcuts' },
+  { id: 'settings-templates', label: 'Settings: Templates', kind: 'navigate', path: '/settings?tab=templates', category: 'settings', description: 'Browse, create and share templates' },
   { id: 'settings-account', label: 'Settings: Account', kind: 'navigate', path: '/settings?section=account', category: 'settings', description: 'Profile and sign out' },
   { id: 'settings-security', label: 'Settings: Privacy', kind: 'navigate', path: '/settings?section=security', category: 'settings', description: 'Two-factor and security' },
   { id: 'settings-tickets', label: 'Settings: Tickets', kind: 'navigate', path: '/settings?section=tickets', category: 'settings', description: 'Your support tickets' },
@@ -111,6 +113,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDef[] = [
   { id: 'sc-support', title: 'Support', keys: 'Alt+H', action: 'go-support' },
   { id: 'sc-settings', title: 'Settings', keys: 'Alt+S', action: 'go-settings' },
   { id: 'sc-shortcut-settings', title: 'Shortcut Settings', keys: 'Alt+K', action: 'settings-shortcuts' },
+  { id: 'sc-global-search', title: 'Global Search', keys: 'Ctrl+K', action: 'global-search' },
   { id: 'sc-create-task', title: 'Create Task', keys: 'Alt+Shift+T', action: 'create-task' },
   { id: 'sc-create-note', title: 'Create Note', keys: 'Alt+Shift+N', action: 'create-note' },
   { id: 'sc-new-ai-chat', title: 'New AI Chat', keys: 'Alt+Shift+A', action: 'new-ai-chat' },
@@ -324,6 +327,7 @@ export function matchesAnyShortcut(e: KeyboardEvent, list: AnyShortcut[]): { sho
  * the modal instead of doing nothing because the URL barely changed.
  */
 export const SHORTCUT_DOM_EVENTS: Record<string, string> = {
+  'global-search': 'shortcut:global-search',
   'create-task': 'shortcut:create-task',
   'create-note': 'shortcut:create-note',
   'new-ai-chat': 'shortcut:new-ai-chat',

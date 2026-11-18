@@ -329,6 +329,16 @@ export const organizationMemberNotes = pgTable('organization_member_notes', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const projectMemberNotes = pgTable('project_member_notes', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id).notNull(),
+  targetUserId: integer('target_user_id').references(() => users.id).notNull(),
+  authorId: integer('author_id').references(() => users.id).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const notes = pgTable('notes', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),

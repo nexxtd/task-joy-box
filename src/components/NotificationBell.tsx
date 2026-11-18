@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, Check, X, Clock, Loader2, Mail, AlertTriangle, Inbox, CheckCheck, CalendarClock, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, Check, X, Clock, Loader2, Mail, AlertTriangle, Inbox, CheckCheck, CalendarClock, Copy, ExternalLink, Sparkles, ArrowRight } from 'lucide-react';
 import { NOTIFICATIONS_REFRESH_EVENT } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
+import { useAuth } from '@/context/AuthContext';
 import type { Task } from '@/types/board';
 
 interface PendingChange {
@@ -54,6 +56,9 @@ const relativeTime = (iso: string): string => {
   return d === 1 ? '1d ago' : `${d}d ago`;
 };
 
+const overdueDismissKey = (item: Pick<OverdueItem, 'source' | 'id' | 'dueDate' | 'dueTime'>) =>
+  `${item.source}:${item.id}:${item.dueDate}:${item.dueTime || ''}`;
+
 const collectOverdue = (tasks: Task[], source: 'Task' | 'Note'): OverdueItem[] => {
   const now = Date.now();
   return tasks
@@ -81,11 +86,87 @@ export const NotificationBell: React.FC = () => {
   const { board } = useBoardContext();
   const { board: notesBoard } = useNotesContext();
 
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const dismissedStorageKey = `dismissed_overdue_notifs_${user?.id || 'anon'}`;
+  const [dismissedOverdueKeys, setDismissedOverdueKeys] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`dismissed_overdue_notifs_${user?.id || 'anon'}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(dismissedStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setDismissedOverdueKeys(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setDismissedOverdueKeys([]);
+    }
+  }, [dismissedStorageKey]);
+
+  const dismissOverdueKeys = (keys: string[]) => {
+    setDismissedOverdueKeys(prev => {
+      const merged = Array.from(new Set([...prev, ...keys]));
+      try {
+        localStorage.setItem(dismissedStorageKey, JSON.stringify(merged.slice(-200)));
+      } catch {}
+      return merged;
+    });
+  };
+
+  const dismissedSet = useMemo(() => new Set(dismissedOverdueKeys), [dismissedOverdueKeys]);
+
   const overdue = useMemo(
-    () => [...collectOverdue(board.tasks, 'Task'), ...collectOverdue(notesBoard.tasks, 'Note')]
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
-    [board.tasks, notesBoard.tasks],
+    () =>
+      [...collectOverdue(board.tasks, 'Task'), ...collectOverdue(notesBoard.tasks, 'Note')]
+        .filter(item => !dismissedSet.has(overdueDismissKey(item)))
+        .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
+    [board.tasks, notesBoard.tasks, dismissedSet],
   );
+
+  const handleDismissNotification = async (id: number) => {
+    const prevList = notifications;
+    setNotifications(curr => curr.filter(n => n.id !== id));
+    try {
+      const res = await fetch(`/api/notifications/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Delete failed');
+    } catch {
+      setNotifications(prevList);
+      toast({ title: 'Could not remove notification', variant: 'destructive' });
+    }
+  };
+
+  const handleClearAllUpdates = async () => {
+    const prevList = notifications;
+    setNotifications(curr => curr.filter(n => n.type === 'project_invite'));
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Clear failed');
+    } catch {
+      setNotifications(prevList);
+      toast({ title: 'Could not clear notifications', variant: 'destructive' });
+    }
+  };
+
+  const openTaskOrNote = (id: string, source: 'Task' | 'Note' = 'Task') => {
+    setOpen(false);
+    navigate(
+      source === 'Note'
+        ? `/notes?open=${encodeURIComponent(id)}`
+        : `/tasks?open=${encodeURIComponent(id)}`,
+    );
+  };
 
   const invites = useMemo(
     () => notifications.filter(n => n.type === 'project_invite'),
@@ -319,26 +400,66 @@ export const NotificationBell: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Overdue tasks and notes (same alerts as the pop-ups) */}
+                  {/* Overdue tasks and notes (clickable & dismissible) */}
                   {overdue.length > 0 && (
                     <div className="border-b border-border/60">
-                      <div className="px-4 pt-3 pb-1.5 flex items-center gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Overdue</span>
+                      <div className="px-4 pt-3 pb-1.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            Overdue ({overdue.length})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => dismissOverdueKeys(overdue.map(overdueDismissKey))}
+                          className="text-[10px] font-semibold text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          Dismiss all
+                        </button>
                       </div>
                       <div className="divide-y divide-border/50">
                         {overdue.map(item => (
-                          <div key={`${item.source}-${item.id}`} className="px-4 py-2.5 flex items-start gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div
+                            key={`${item.source}-${item.id}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openTaskOrNote(item.id, item.source)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openTaskOrNote(item.id, item.source);
+                              }
+                            }}
+                            className="group w-full px-4 py-2.5 flex items-center gap-2.5 text-left cursor-pointer hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">
                               <CalendarClock className="w-3.5 h-3.5 text-destructive" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-foreground truncate">{item.title}</p>
+                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                                {item.title || `Untitled ${item.source.toLowerCase()}`}
+                              </p>
                               <p className="text-[11px] text-muted-foreground">
-                                {item.source} was due {item.dueDate}{item.dueTime ? ` at ${item.dueTime}` : ''}
+                                {item.source} was due {item.dueDate}{item.dueTime ? ` at ${item.dueTime}` : ''} · Click to open
                               </p>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold flex-shrink-0">Overdue</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold flex-shrink-0">
+                              Overdue
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            <button
+                              type="button"
+                              aria-label="Dismiss notification"
+                              title="Dismiss notification"
+                              onClick={e => {
+                                e.stopPropagation();
+                                dismissOverdueKeys([overdueDismissKey(item)]);
+                              }}
+                              className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -390,16 +511,46 @@ export const NotificationBell: React.FC = () => {
                   {/* Activity / other notifications */}
                   {otherNotifications.length > 0 && (
                     <div>
-                      <div className="px-4 pt-3 pb-1.5 flex items-center gap-2">
-                        <Inbox className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Updates</span>
+                      <div className="px-4 pt-3 pb-1.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Inbox className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            Updates ({otherNotifications.length})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleClearAllUpdates()}
+                          className="text-[10px] font-semibold text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          Clear all
+                        </button>
                       </div>
                       <div className="divide-y divide-border/50">
                         {otherNotifications.map(n => {
                           const isSmart = n.type === 'smart_alert';
                           const isNormal = n.type === 'normal_alert';
+                          let linkedTaskId: string | null = null;
+                          let linkedSource: 'Task' | 'Note' = 'Task';
+                          try {
+                            const parsed = (n as any).data ? JSON.parse((n as any).data) : null;
+                            if (parsed?.taskId) {
+                              linkedTaskId = String(parsed.taskId);
+                              linkedSource = parsed.itemKind === 'note' ? 'Note' : 'Task';
+                            } else if (typeof parsed?.alertKey === 'string') {
+                              const m = parsed.alertKey.match(/^normal_(?:overdue|soon|urgent)_(.+?)_\d{4}-\d{2}-\d{2}/);
+                              if (m?.[1]) linkedTaskId = m[1];
+                            }
+                          } catch {}
+
                           return (
-                            <div key={n.id} className="px-4 py-3 flex items-start gap-2.5">
+                            <div
+                              key={n.id}
+                              onClick={() => linkedTaskId && openTaskOrNote(linkedTaskId, linkedSource)}
+                              className={`group px-4 py-3 flex items-start gap-2.5 transition-colors ${
+                                linkedTaskId ? 'cursor-pointer hover:bg-muted/50' : ''
+                              }`}
+                            >
                               <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isSmart ? 'bg-purple-500/15' : isNormal ? 'bg-amber-500/15' : n.read ? 'bg-muted/60' : 'bg-primary/10'}`}>
                                 {isSmart ? (
                                   <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -412,7 +563,9 @@ export const NotificationBell: React.FC = () => {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                    <p className={`text-xs ${n.read ? 'font-medium text-foreground/80' : 'font-semibold text-foreground'}`}>{n.title}</p>
+                                    <p className={`text-xs ${n.read ? 'font-medium text-foreground/80' : 'font-semibold text-foreground'} ${linkedTaskId ? 'group-hover:text-primary transition-colors' : ''}`}>
+                                      {n.title}
+                                    </p>
                                     {isSmart && (
                                       <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">AI</span>
                                     )}
@@ -421,7 +574,21 @@ export const NotificationBell: React.FC = () => {
                                 </div>
                                 <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{n.message}</p>
                               </div>
-                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
+                                <button
+                                  type="button"
+                                  aria-label="Dismiss notification"
+                                  title="Remove notification"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    void handleDismissNotification(n.id);
+                                  }}
+                                  className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}

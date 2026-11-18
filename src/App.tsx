@@ -130,6 +130,8 @@ const Notifier = () => {
               kind: a.kind,
               title: a.title,
               message: a.body,
+              taskId: a.taskId,
+              itemKind: a.itemKind,
             })),
           }),
         })

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import {
-  Palette, Bell, Globe, Battery, Keyboard,
+  Palette, Bell, Globe, Battery, Keyboard, LayoutTemplate,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
   History, Brain, CheckCircle2, X, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
@@ -24,6 +24,7 @@ import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
 import DiscordCommunitySection from '@/components/shared/DiscordCommunitySection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
+import { TemplatesBrowser } from '@/pages/Templates';
 import { notificationsSupported, notificationPermission, requestNotificationPermission, deviceNotify, sendTestNotification, setSmartAlertsEnabled } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -279,6 +280,7 @@ const SettingsPage: React.FC = () => {
     { id: 'energy', label: 'Energy Levels', icon: Battery },
     { id: 'history', label: 'History', icon: History },
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+    { id: 'templates', label: 'Templates', icon: LayoutTemplate },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
     { id: 'organization', label: 'Organization', icon: Building2 },
@@ -288,7 +290,7 @@ const SettingsPage: React.FC = () => {
   const location = useLocation();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const rawTab = params.get('tab');
+    const rawTab = params.get('tab') || params.get('section');
     const tab = rawTab === 'integrations' ? 'account' : rawTab;
     if (tab && sections.some(s => s.id === tab)) {
       setActiveSection(tab);
@@ -956,7 +958,7 @@ const SettingsPage: React.FC = () => {
         </div>
 
         <div className="settings-panel-content flex-1 overflow-y-auto p-4">
-          <div className="max-w-2xl">
+          <div className={activeSection === 'templates' ? 'max-w-6xl' : 'max-w-2xl'}>
           {activeSection === 'appearance' && (
             <div className="space-y-4">
               <div>
@@ -1674,6 +1676,12 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeSection === 'templates' && (
+            <div className="animate-fade-in">
+              <TemplatesBrowser embedded />
             </div>
           )}
 

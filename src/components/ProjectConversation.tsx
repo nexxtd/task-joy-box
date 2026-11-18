@@ -15,12 +15,13 @@ import {
   Scaling,
   Search,
   Send,
-  Share2,
   StickyNote,
   CheckSquare,
   X,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getActiveDraggedPlannerItem, setActiveDraggedPlannerItem } from '@/lib/plannerDrag';
 import { changeChatWindow, fitChatWindow, type ChatResizeDirection, type ChatWindowAction, type ChatWindowRect } from '@/lib/projectChatWindow';
 import './ProjectConversation.css';
 
@@ -58,7 +59,6 @@ interface Props {
   mode: ConversationMode;
   onClose?: () => void;
   onModeChange?: (mode: ConversationMode) => void;
-  onInvite?: () => void;
   onOpenTask?: (taskId: string) => void;
   onOpenNote?: (noteId: string) => void;
 }
@@ -104,7 +104,6 @@ export const ProjectConversation: React.FC<Props> = ({
   mode,
   onClose,
   onModeChange,
-  onInvite,
   onOpenTask,
   onOpenNote,
 }) => {
@@ -325,8 +324,7 @@ export const ProjectConversation: React.FC<Props> = ({
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = event.target.files?.[0] || null;
+  const attachDroppedOrPickedFile = (picked: File | null) => {
     if (!picked) return;
     if (picked.size > 25 * 1024 * 1024) {
       setUploadError('File too large. Max 25MB.');
@@ -335,6 +333,11 @@ export const ProjectConversation: React.FC<Props> = ({
     }
     setUploadError(null);
     setFile(picked);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = event.target.files?.[0] || null;
+    attachDroppedOrPickedFile(picked);
   };
 
   const clearFile = () => {
@@ -357,10 +360,20 @@ export const ProjectConversation: React.FC<Props> = ({
   };
 
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const [dropHintKind, setDropHintKind] = useState<'file' | 'planner'>('planner');
 
   const handleDragOver = (e: React.DragEvent) => {
+    const types = Array.from(e.dataTransfer?.types || []);
+    const hasFiles = types.includes('Files');
+    const hasPlanner =
+      types.includes('application/x-planner-item') ||
+      Boolean(getActiveDraggedPlannerItem()) ||
+      types.includes('text/plain');
+    if (!hasFiles && !hasPlanner) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
+    const nextKind: 'file' | 'planner' = hasFiles && !getActiveDraggedPlannerItem() ? 'file' : 'planner';
+    if (dropHintKind !== nextKind) setDropHintKind(nextKind);
     if (!isDropTarget) setIsDropTarget(true);
   };
 
@@ -373,40 +386,86 @@ export const ProjectConversation: React.FC<Props> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDropTarget(false);
-    const rawData = e.dataTransfer.getData('application/x-planner-item') || e.dataTransfer.getData('text/plain');
-    if (!rawData) return;
-    try {
-      const parsed = JSON.parse(rawData);
-      if (parsed && (parsed.type === 'task' || parsed.type === 'note') && parsed.id && parsed.title) {
-        setLink({
-          type: parsed.type,
-          id: String(parsed.id),
-          title: String(parsed.title),
-          column: parsed.column ? String(parsed.column) : undefined,
-        });
-        return;
+
+    // 1. OS / Desktop file drop
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      attachDroppedOrPickedFile(droppedFiles[0]);
+      setActiveDraggedPlannerItem(null);
+      return;
+    }
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      for (const item of Array.from(e.dataTransfer.items)) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) {
+            attachDroppedOrPickedFile(f);
+            setActiveDraggedPlannerItem(null);
+            return;
+          }
+        }
       }
-    } catch {
-      const query = rawData.trim().toLowerCase();
-      const matchedTask = tasks.find(t => t.title.toLowerCase() === query);
-      if (matchedTask) {
-        setLink({ type: 'task', id: String(matchedTask.id), title: matchedTask.title, column: matchedTask.columnName });
-        return;
+    }
+
+    // 2. Task or Note cross-pane / split-screen drop (dataTransfer OR active memory fallback)
+    const activeFallback = getActiveDraggedPlannerItem();
+    setActiveDraggedPlannerItem(null);
+    const rawData =
+      e.dataTransfer?.getData('application/x-planner-item') ||
+      e.dataTransfer?.getData('text/plain') ||
+      '';
+    if (rawData) {
+      try {
+        const parsed = JSON.parse(rawData);
+        if (parsed && (parsed.type === 'task' || parsed.type === 'note') && parsed.id) {
+          setLink({
+            type: parsed.type,
+            id: String(parsed.id),
+            title: String(parsed.title || (parsed.type === 'note' ? 'Untitled note' : 'Untitled task')),
+            column: parsed.column ? String(parsed.column) : undefined,
+          });
+          return;
+        }
+      } catch {
+        const query = rawData.trim().toLowerCase();
+        const matchedTask = tasks.find(t => t.title.toLowerCase() === query);
+        if (matchedTask) {
+          setLink({ type: 'task', id: String(matchedTask.id), title: matchedTask.title, column: matchedTask.columnName });
+          return;
+        }
+        const matchedNote = notes.find(n => n.title.toLowerCase() === query);
+        if (matchedNote) {
+          setLink({ type: 'note', id: String(matchedNote.id), title: matchedNote.title });
+          return;
+        }
       }
-      const matchedNote = notes.find(n => n.title.toLowerCase() === query);
-      if (matchedNote) {
-        setLink({ type: 'note', id: String(matchedNote.id), title: matchedNote.title });
-        return;
-      }
+    }
+
+    if (activeFallback) {
+      setLink({
+        type: activeFallback.type,
+        id: String(activeFallback.id),
+        title: String(activeFallback.title || (activeFallback.type === 'note' ? 'Untitled note' : 'Untitled task')),
+        column: activeFallback.column ? String(activeFallback.column) : undefined,
+      });
     }
   };
 
   const dropOverlay = isDropTarget && (
-    <div className="absolute inset-0 z-30 bg-primary/15 border-2 border-dashed border-primary rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-[1px] transition-all">
+    <div className="absolute inset-0 z-30 bg-primary/15 border-2 border-dashed border-primary rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-[1px] transition-all animate-fade-in">
       <div className="p-3 rounded-full bg-card shadow-lg text-primary mb-2">
-        <Link2 className="w-6 h-6 animate-pulse" />
+        {dropHintKind === 'file' ? (
+          <Upload className="w-6 h-6 animate-bounce" />
+        ) : (
+          <Link2 className="w-6 h-6 animate-pulse" />
+        )}
       </div>
-      <span className="text-sm font-semibold text-foreground">Drop task or note to reference</span>
+      <span className="text-sm font-semibold text-foreground">
+        {dropHintKind === 'file' ? 'Drop file to attach' : 'Drop task or note to reference'}
+      </span>
+      <span className="text-[11px] text-muted-foreground mt-0.5">
+        {dropHintKind === 'file' ? 'Images, PDF, Office docs, TXT (max 25MB)' : 'Links directly in this conversation'}
+      </span>
     </div>
   );
 
@@ -450,15 +509,6 @@ export const ProjectConversation: React.FC<Props> = ({
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0" onPointerDown={event => event.stopPropagation()}>
-        {onInvite && (
-          <button
-            onClick={onInvite}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            Invite
-          </button>
-        )}
         {onModeChange && (
           <button
             onClick={() => onModeChange(mode === 'docked' ? 'floating' : 'docked')}

@@ -3,6 +3,8 @@ import React from 'react';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG } from '@/types/board';
 import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { AssignedBadge } from '@/components/shared/AssignedBadge';
+import { startPlannerItemDrag, endPlannerItemDrag } from '@/lib/plannerDrag';
 
 interface TaskCardProps {
   task: Task;
@@ -30,6 +32,11 @@ const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick, isDraggin
 
   return (
     <div
+      draggable={true}
+      onDragStart={e => {
+        startPlannerItemDrag(e, { type: 'task', id: task.id, title: task.title });
+      }}
+      onDragEnd={endPlannerItemDrag}
       onClick={onClick}
       className={`group rounded-lg bg-task p-3 cursor-pointer border border-transparent hover:border-border transition-all duration-150 hover:bg-task-hover ${isDragging ? 'task-dragging' : ''} ${task.completed ? 'opacity-60' : ''}`}
     >
@@ -52,6 +59,7 @@ const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick, isDraggin
           <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
         )}
         <p className={`text-sm font-bold text-foreground leading-snug truncate flex-1 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
+        <AssignedBadge task={task} />
         <button
           onClick={handleDeepFocusClick}
           className="ml-auto opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity p-2 -m-1 min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-primary/10 rounded text-muted-foreground hover:text-primary"

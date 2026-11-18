@@ -70,7 +70,6 @@ export const APP_PAGES: AppPageDef[] = [
     icon: CalendarDays,
     component: lazy(() => import('@/pages/CalendarPage')),
     minSplitWidth: 560,
-    inSplitPicker: true,
   },
   {
     path: '/insights',
@@ -102,7 +101,6 @@ export const APP_PAGES: AppPageDef[] = [
     icon: LayoutTemplate,
     component: lazy(() => import('@/pages/Templates')),
     minSplitWidth: 560,
-    inSplitPicker: true,
   },
   {
     path: '/documents',
@@ -117,7 +115,6 @@ export const APP_PAGES: AppPageDef[] = [
     icon: Users,
     component: lazy(() => import('@/pages/Collaboration')),
     minSplitWidth: 560,
-    inSplitPicker: true,
     paidOnly: true,
   },
   {

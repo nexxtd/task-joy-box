@@ -249,6 +249,20 @@ const Organizations: React.FC = () => {
   const [newAdminUserId, setNewAdminUserId] = useState<number | ''>('');
   const [transferOwnerUserId, setTransferOwnerUserId] = useState<number | ''>('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [joinedOrganizations, setJoinedOrganizations] = useState<OrgSummary[]>([]);
+  const [detailError, setDetailError] = useState('');
+
+  const managedGroupSet = useMemo(() => new Set(managedGroupIds), [managedGroupIds]);
+  const directAdminGroupSet = useMemo(() => new Set(adminGroupIds), [adminGroupIds]);
+  const selectedMember = useMemo(
+    () => members.find(m => m.id === selectedMemberId) || null,
+    [members, selectedMemberId],
+  );
+  const memberNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    members.forEach(m => map.set(m.id, m.name));
+    return map;
+  }, [members]);
 
   const fetchOrganizationsList = async () => {
     setLoading(true);
@@ -256,13 +270,19 @@ const Organizations: React.FC = () => {
       const res = await fetch('/api/organizations', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        const list = data.organizations || [];
+        const list: OrgSummary[] = data.organizations || [];
+        const joinedList: OrgSummary[] = data.joinedOrganizations || [];
         setOrganizations(list);
+        setJoinedOrganizations(joinedList);
         const paramId = searchParams.get('id');
         if (paramId) {
           const parsedParam = parseInt(paramId, 10);
           if (!isNaN(parsedParam)) {
             setSelectedOrgId(parsedParam);
+          } else if (list.length > 0) {
+            setSelectedOrgId(list[0].id);
+          } else {
+            setSelectedOrgId(null);
           }
         } else if (list.length > 0 && selectedOrgId === null) {
           setSelectedOrgId(list[0].id);
@@ -277,10 +297,11 @@ const Organizations: React.FC = () => {
 
   const fetchOrgDetails = async (id: number) => {
     setDetailLoading(true);
+    setDetailError('');
     try {
       const res = await fetch(`/api/organizations/${id}`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
         setOrgDetail(data.organization);
         setMembers(data.members || []);
         setGroups(data.groups || []);
@@ -304,10 +325,15 @@ const Organizations: React.FC = () => {
           setActiveTab('users');
         }
       } else {
-        toast({ title: 'Error', description: 'Could not load organization details', variant: 'destructive' });
+        const msg = data.error || 'Could not load organization details';
+        setOrgDetail(null);
+        setDetailError(msg);
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
       }
     } catch (e) {
       console.error('Failed to load org details', e);
+      setOrgDetail(null);
+      setDetailError('Failed to connect while loading organization details.');
     } finally {
       setDetailLoading(false);
     }
@@ -349,7 +375,10 @@ const Organizations: React.FC = () => {
     )
       .then(async res => (res.ok ? res.json() : null))
       .then(data => {
-        if (data) setSeatQuote(data);
+        // Only trust a complete quote; a partial one crashed the Settings tab.
+        const numeric = ['perSeatMonthly', 'newTotal', 'currentTotal', 'seatDelta', 'difference'];
+        const complete = data && numeric.every(k => typeof data[k] === 'number' && Number.isFinite(data[k]));
+        setSeatQuote(complete ? data : null);
       })
       .catch(() => {})
       .finally(() => setSeatQuoteLoading(false));
@@ -1074,14 +1103,36 @@ const Organizations: React.FC = () => {
   // If user does not have any organization selected or owns none
   if (organizations.length === 0 && !selectedOrgId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mb-4 shadow-sm">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
+        <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mb-4 shadow-sm animate-fade-in">
           <Building2 className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-foreground">Organizations & Teams</h2>
         <p className="text-sm text-muted-foreground max-w-md mt-2 leading-relaxed">
           Create an organization for your school, classroom, or family. Organizations grant plan access to all members with customizable seats and groups.
         </p>
+
+        {joinedOrganizations.length > 0 && (
+          <div className="w-full max-w-md mt-6 space-y-2 text-left">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-1">
+              Your Memberships
+            </p>
+            {joinedOrganizations.map(org => (
+              <div key={org.id} className="p-3.5 rounded-2xl border border-border bg-card flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {org.type} · {org.tier} · Role: {org.role}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex-shrink-0">
+                  Active Member
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mt-6">
           <button
             onClick={() => {
@@ -1110,12 +1161,54 @@ const Organizations: React.FC = () => {
     );
   }
 
+  if (detailLoading && !orgDetail) {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <span className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-muted-foreground font-medium">Loading organization workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (detailError && !orgDetail) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-4">
+          <Building2 className="w-7 h-7" />
+        </div>
+        <h2 className="text-lg font-bold text-foreground">Unable to load organization</h2>
+        <p className="text-sm text-muted-foreground max-w-md mt-1.5">{detailError}</p>
+        <div className="flex items-center gap-2.5 mt-5">
+          {selectedOrgId !== null && (
+            <button
+              onClick={() => fetchOrgDetails(selectedOrgId)}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all"
+            >
+              Retry
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setDetailError('');
+              setSelectedOrgId(organizations[0]?.id ?? null);
+              if (organizations.length === 0) setSearchParams({}, { replace: true });
+            }}
+            className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:bg-muted transition-all"
+          >
+            {organizations.length > 0 ? 'Switch Organization' : 'Back to Organizations'}
+          </button>
+        </div>
+        {renderCreateOrgModal()}
+      </div>
+    );
+  }
+
   // Available tabs depending on organization type and owner role
   // "Family organizations only show Users and Settings."
   // "Administrators can do everything except billing and settings."
   const isFamily = orgDetail?.type === 'family';
-  const managedGroupSet = useMemo(() => new Set(managedGroupIds), [managedGroupIds]);
-  const directAdminGroupSet = useMemo(() => new Set(adminGroupIds), [adminGroupIds]);
   const canMoveMembers = isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanMoveMembers);
   const canEditGroupMeta = (groupId: number) =>
     isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanEditGroups && managedGroupSet.has(groupId));
@@ -1139,15 +1232,6 @@ const Organizations: React.FC = () => {
     !member.isOwner &&
     member.id !== user?.id &&
     (isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanKick && !member.isAdmin));
-  const selectedMember = useMemo(
-    () => members.find(m => m.id === selectedMemberId) || null,
-    [members, selectedMemberId],
-  );
-  const memberNameById = useMemo(() => {
-    const map = new Map<number, string>();
-    members.forEach(m => map.set(m.id, m.name));
-    return map;
-  }, [members]);
   const tabs: Array<{ id: 'users' | 'groups' | 'both' | 'settings'; label: string; icon: any }> = isFamily
     ? [
         { id: 'users', label: 'Users', icon: Users },

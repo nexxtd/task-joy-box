@@ -15,6 +15,8 @@ import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import { convertDraftImagesBatch } from '@/lib/attachmentUpload';
 import { readTaskSections, writeTaskSections, readExpandedLists, readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import TaskSideViewPanel from '@/components/shared/TaskSideViewPanel';
+import { AssignedBadge } from '@/components/shared/AssignedBadge';
+import { startPlannerItemDrag, endPlannerItemDrag } from '@/lib/plannerDrag';
 import { DEFAULT_TEMPLATE_TAGS } from '../../shared/defaultTemplates';
 import {
   ArrowDown,
@@ -1974,17 +1976,13 @@ const Tasks: React.FC = () => {
         key={task.id}
         draggable={!isDeleteMode}
         onDragStart={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, textarea, select, [class*="cursor-grab"]')) return;
-          const itemData = JSON.stringify({
+          startPlannerItemDrag(e, {
             type: 'note',
             id: task.id,
             title: task.title,
           });
-          e.dataTransfer.setData('application/x-planner-item', itemData);
-          e.dataTransfer.setData('text/plain', itemData);
-          e.dataTransfer.effectAllowed = 'copyLink';
         }}
+        onDragEnd={endPlannerItemDrag}
         onClick={() => {
           if (isDeleteMode) {
             setSelectedDeleteTaskIds(prev =>
@@ -2067,6 +2065,7 @@ const Tasks: React.FC = () => {
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              <AssignedBadge task={task} currentUserId={user?.id} />
               <button
                 onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
                 className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
@@ -4291,6 +4290,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   onTemplateEditNameChange,
 }) => {
   const navigate = useNavigate();
+  const { user: activeUser } = useAuth();
   const [sideViewOpen, setSideViewOpen] = useState(true);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
@@ -4375,7 +4375,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
       ...(task.comments || []).map(comment => ({
         id: comment.id,
-        text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
+        text: `${comment.authorName ? `${comment.authorName}: ` : ''}${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
         createdAt: comment.createdAt,
       })),
     ];
@@ -4678,17 +4678,37 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const addComment = () => {
     if (!newCommentText.trim()) return;
     onUpdateTask(task.id, {
-      comments: [...(task.comments || []), { id: crypto.randomUUID(), text: newCommentText.trim(), createdAt: new Date().toISOString() }],
+      comments: [
+        ...(task.comments || []),
+        {
+          id: crypto.randomUUID(),
+          text: newCommentText.trim(),
+          createdAt: new Date().toISOString(),
+          authorId: activeUser?.id,
+          authorName: activeUser?.name || activeUser?.email?.split('@')[0] || 'You',
+          authorEmail: activeUser?.email,
+        },
+      ],
     });
     setNewCommentText('');
   };
 
   const deleteComment = (commentId: string) => {
+    const target = (task.comments || []).find(c => c.id === commentId);
+    if (!target) return;
+    if (target.authorId != null && activeUser?.id != null && target.authorId !== activeUser.id) return;
     onUpdateTask(task.id, { comments: (task.comments || []).filter(c => c.id !== commentId) });
   };
 
   const updateComment = (commentId: string, text: string) => {
-    onUpdateTask(task.id, { comments: (task.comments || []).map(c => c.id === commentId ? { ...c, text } : c) });
+    const target = (task.comments || []).find(c => c.id === commentId);
+    if (!target) return;
+    if (target.authorId != null && activeUser?.id != null && target.authorId !== activeUser.id) return;
+    onUpdateTask(task.id, {
+      comments: (task.comments || []).map(c =>
+        c.id === commentId ? { ...c, text, updatedAt: new Date().toISOString() } : c,
+      ),
+    });
   };
 
   return (
@@ -5176,74 +5196,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </span>
             )}
             <span className="text-xs text-muted-foreground">Created: {new Date(task.createdAt).toLocaleDateString(dateLocale())}</span>
-            <div className="relative">
-              <button
-                onClick={async () => {
-                  try {
-                    const t = await fetchTemplates();
-                    setFullViewTemplates(t);
-                    setTemplatePopupOpen(true);
-                  } catch (err) {
-                    console.error('Failed to fetch templates:', err);
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-              >
-                <Star className="w-3.5 h-3.5" />
-                Templates
-              </button>
-              {templatePopupOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setTemplatePopupOpen(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
-                    <button
-                      onClick={() => { setTemplatePopupOpen(false); setFullViewSaveTmplOpen(true); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
-                    >
-                      <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center">
-                        <Plus className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                      Save as template
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setTemplatePopupOpen(false);
-                        setFullViewLoadTmplOpen(true);
-                        setFullViewLoadTemplatesLoading(true);
-                        try {
-                          const t = await fetchTemplates();
-                          setFullViewLoadTemplates(t);
-                        } catch (err) {
-                          console.error('Failed to load templates:', err);
-                        } finally {
-                          setFullViewLoadTemplatesLoading(false);
-                        }
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
-                    >
-                      <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
-                        <FolderKanban className="w-3.5 h-3.5 text-muted-foreground" />
-                      </div>
-                      Load template
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      onClick={() => {
-                        setTemplatePopupOpen(false);
-                        onClose();
-                        navigate(`/templates?type=note&applyTo=${encodeURIComponent(task.id)}`);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-primary font-semibold rounded-lg hover:bg-primary/10 transition-all"
-                    >
-                      <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
-                        <Compass className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                      Browse templates
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
           </div>
 
           {editingTemplateMeta ? (
@@ -5272,7 +5224,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           task={task}
           open={sideViewOpen}
           onHide={() => setSideViewOpen(false)}
-          onCloseSide={() => setSideViewOpen(false)}
+          onCloseModal={onClose}
           onUpdateTask={onUpdateTask}
           activityEntries={activityEntries}
         />

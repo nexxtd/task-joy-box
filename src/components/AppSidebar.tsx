@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, FileText, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck, Building2, LayoutTemplate
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck, Building2, Search
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -50,7 +50,6 @@ const AppSidebar: React.FC = () => {
     { icon: BarChart3, label: T.nav_insights, path: '/insights' },
     { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
-    { icon: LayoutTemplate, label: t('Templates'), path: '/templates' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
     { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
@@ -160,6 +159,22 @@ const AppSidebar: React.FC = () => {
 
       {/* Bottom */}
       <div className="px-2 py-3 border-t border-border space-y-0.5">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('shortcut:global-search'))}
+          title={t('Global Search (Ctrl+K)')}
+          className={`w-full flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-3'} py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors mb-1`}
+        >
+          <span className="flex items-center gap-2.5 min-w-0">
+            <Search className="w-4 h-4 flex-shrink-0 text-primary" />
+            {!collapsed && <span className="truncate">{t('Search')}</span>}
+          </span>
+          {!collapsed && (
+            <kbd className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border bg-background/80 text-muted-foreground">
+              Ctrl+K
+            </kbd>
+          )}
+        </button>
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-1 py-1`}>
           {!collapsed && <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Notifications</span>}
           <NotificationBell />

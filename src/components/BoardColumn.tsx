@@ -8,6 +8,8 @@ import { useNotesContext } from '@/context/NotesContext';
 import { Plus, Trash2, Sparkles, Lock, X, ChevronDown, ChevronUp, Calendar, Brain, Clock3, GripVertical, Tag, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { AssignedBadge } from '@/components/shared/AssignedBadge';
+import { startPlannerItemDrag, endPlannerItemDrag } from '@/lib/plannerDrag';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
 
@@ -318,13 +320,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
         data-no-pan="true"
         draggable={true}
         onDragStart={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, textarea, select, .kanban-grip')) return;
-          const itemData = JSON.stringify({ type: 'task', id: task.id, title: task.title, column: column.title });
-          e.dataTransfer.setData('application/x-planner-item', itemData);
-          e.dataTransfer.setData('text/plain', itemData);
-          e.dataTransfer.effectAllowed = 'copyLink';
+          startPlannerItemDrag(e, { type: 'task', id: task.id, title: task.title, column: column.title });
         }}
+        onDragEnd={endPlannerItemDrag}
         onClick={() => onTaskClick(task)}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer max-w-full ${
           isDraggingRow
@@ -444,6 +442,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <AssignedBadge task={task} currentUserId={user?.id} />
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
               className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"
@@ -569,13 +568,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
         data-note-row="true"
         draggable={true}
         onDragStart={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, textarea, select, .kanban-grip')) return;
-          const itemData = JSON.stringify({ type: 'note', id: note.id, title: note.title, column: column.title });
-          e.dataTransfer.setData('application/x-planner-item', itemData);
-          e.dataTransfer.setData('text/plain', itemData);
-          e.dataTransfer.effectAllowed = 'copyLink';
+          startPlannerItemDrag(e, { type: 'note', id: note.id, title: note.title, column: column.title });
         }}
+        onDragEnd={endPlannerItemDrag}
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note); }}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer max-w-full ${
           isDraggingRow
@@ -629,6 +624,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <AssignedBadge task={note} currentUserId={user?.id} />
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
               className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"

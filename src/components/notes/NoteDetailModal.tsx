@@ -357,15 +357,6 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
               </span>
             )}
             <span className="text-xs text-muted-foreground">Created: {new Date(note.createdAt).toLocaleDateString()}</span>
-            {!isTemplateEdit && (
-              <button
-                onClick={onTemplatesClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-              >
-                <Star className="w-3.5 h-3.5" />
-                Templates
-              </button>
-            )}
           </div>
           <button onClick={onDelete} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium">
             <Trash2 className="w-3.5 h-3.5" /> Delete Note

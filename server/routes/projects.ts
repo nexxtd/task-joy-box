@@ -14,6 +14,7 @@ import {
   projectJoinRequests,
   projectMembers,
   projects,
+  projectMemberNotes,
   users,
   userNotifications,
 } from '../../shared/schema.js';
@@ -759,6 +760,182 @@ router.post('/:projectId/leave', requireAuth, async (req: AuthRequest, res: Resp
   } catch (error) {
     console.error('Leave project error:', error);
     res.status(500).json({ error: 'Failed to leave project' });
+  }
+});
+
+// Project member notes — list notes for a member in a project
+router.get('/:projectId/members/:memberId/notes', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const targetUserId = parseInt(req.params.memberId, 10);
+    if (!Number.isFinite(projectId) || !Number.isFinite(targetUserId)) {
+      return res.status(400).json({ error: 'Invalid project or member ID' });
+    }
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Not a project member' });
+
+    const [proj] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    const isOwner = proj?.ownerId === req.userId;
+
+    const rows = await db
+      .select({
+        id: projectMemberNotes.id,
+        content: projectMemberNotes.content,
+        authorId: projectMemberNotes.authorId,
+        targetUserId: projectMemberNotes.targetUserId,
+        createdAt: projectMemberNotes.createdAt,
+        updatedAt: projectMemberNotes.updatedAt,
+        authorName: users.name,
+        authorEmail: users.email,
+      })
+      .from(projectMemberNotes)
+      .leftJoin(users, eq(users.id, projectMemberNotes.authorId))
+      .where(and(eq(projectMemberNotes.projectId, projectId), eq(projectMemberNotes.targetUserId, targetUserId)))
+      .orderBy(desc(projectMemberNotes.createdAt));
+
+    res.json({
+      notes: rows.map(r => ({
+        id: r.id,
+        content: r.content,
+        authorId: r.authorId,
+        authorName: r.authorName || r.authorEmail?.split('@')[0] || 'Member',
+        targetUserId: r.targetUserId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        canEdit: r.authorId === req.userId,
+        canDelete: r.authorId === req.userId || isOwner,
+      })),
+    });
+  } catch (error) {
+    console.error('Get project member notes error:', error);
+    res.status(500).json({ error: 'Failed to load member notes' });
+  }
+});
+
+// Project member notes — add a note on a project member
+router.post('/:projectId/members/:memberId/notes', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const targetUserId = parseInt(req.params.memberId, 10);
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (!Number.isFinite(projectId) || !Number.isFinite(targetUserId) || !content) {
+      return res.status(400).json({ error: 'Valid project, member, and note content are required' });
+    }
+    const [requester] = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (!requester) return res.status(403).json({ error: 'Not a project member' });
+    if (requester.role === 'view' || requester.role === 'member') {
+      return res.status(403).json({ error: 'View-only members cannot add member notes' });
+    }
+
+    const [targetMembership] = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, targetUserId)));
+    if (!targetMembership) return res.status(404).json({ error: 'Target user is not in this project' });
+
+    const [inserted] = await db
+      .insert(projectMemberNotes)
+      .values({
+        projectId,
+        targetUserId,
+        authorId: req.userId!,
+        content,
+      })
+      .returning();
+
+    const [author] = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, req.userId!))
+      .limit(1);
+
+    res.status(201).json({
+      note: {
+        ...inserted,
+        authorName: author?.name || author?.email?.split('@')[0] || 'You',
+        canEdit: true,
+        canDelete: true,
+      },
+    });
+  } catch (error) {
+    console.error('Create project member note error:', error);
+    res.status(500).json({ error: 'Failed to create member note' });
+  }
+});
+
+// Project member notes — edit own note
+router.patch('/:projectId/members/:memberId/notes/:noteId', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const targetUserId = parseInt(req.params.memberId, 10);
+    const noteId = parseInt(req.params.noteId, 10);
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (!content) return res.status(400).json({ error: 'Note content is required' });
+
+    const [existing] = await db
+      .select()
+      .from(projectMemberNotes)
+      .where(
+        and(
+          eq(projectMemberNotes.id, noteId),
+          eq(projectMemberNotes.projectId, projectId),
+          eq(projectMemberNotes.targetUserId, targetUserId),
+        ),
+      )
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Member note not found' });
+    if (existing.authorId !== req.userId) {
+      return res.status(403).json({ error: 'Only the note author can edit this note' });
+    }
+
+    const [updated] = await db
+      .update(projectMemberNotes)
+      .set({ content, updatedAt: new Date().toISOString() })
+      .where(eq(projectMemberNotes.id, noteId))
+      .returning();
+    res.json({ note: updated });
+  } catch (error) {
+    console.error('Update project member note error:', error);
+    res.status(500).json({ error: 'Failed to update member note' });
+  }
+});
+
+// Project member notes — delete own note (or owner)
+router.delete('/:projectId/members/:memberId/notes/:noteId', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const targetUserId = parseInt(req.params.memberId, 10);
+    const noteId = parseInt(req.params.noteId, 10);
+
+    const [existing] = await db
+      .select()
+      .from(projectMemberNotes)
+      .where(
+        and(
+          eq(projectMemberNotes.id, noteId),
+          eq(projectMemberNotes.projectId, projectId),
+          eq(projectMemberNotes.targetUserId, targetUserId),
+        ),
+      )
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Member note not found' });
+
+    const [proj] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (existing.authorId !== req.userId && proj?.ownerId !== req.userId) {
+      return res.status(403).json({ error: 'Only the author or project owner can delete this note' });
+    }
+
+    await db.delete(projectMemberNotes).where(eq(projectMemberNotes.id, noteId));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete project member note error:', error);
+    res.status(500).json({ error: 'Failed to delete member note' });
   }
 });
 

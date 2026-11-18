@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { pendingUserChanges, userNotifications, users, userSettings, projectJoinRequests, projectMembers, projects } from '../../shared/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, ne } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { normalizeLanguageCode } from '../lib/language.js';
 import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
@@ -300,7 +300,12 @@ router.post('/sync-alerts', async (req: AuthRequest, res: Response) => {
         type: notifType,
         title: String(item.title).slice(0, 200),
         message: String(item.message).slice(0, 1000),
-        data: JSON.stringify({ alertKey: item.key, kind: notifType }),
+        data: JSON.stringify({
+          alertKey: item.key,
+          kind: notifType,
+          ...(item.taskId ? { taskId: String(item.taskId) } : {}),
+          ...(item.itemKind ? { itemKind: String(item.itemKind) } : {}),
+        }),
         read: false,
       });
       inserted += 1;
@@ -342,6 +347,18 @@ router.post('/weekly-summary', async (req: AuthRequest, res: Response) => {
   } catch (e) {
     console.error('Weekly summary route failed:', e);
     res.status(500).json({ error: 'Failed to send weekly summary' });
+  }
+});
+
+router.delete('/', async (req: AuthRequest, res: Response) => {
+  try {
+    await db
+      .delete(userNotifications)
+      // Pending project invites need an accept/decline answer, so "clear all" keeps them.
+      .where(and(eq(userNotifications.userId, req.userId!), ne(userNotifications.type, 'project_invite')));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to clear notifications' });
   }
 });
 

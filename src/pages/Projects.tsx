@@ -38,10 +38,13 @@ import {
   ArrowLeft,
   Check,
   Link2,
+  Flag,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import BoardColumn from '@/components/BoardColumn';
+import ProjectUsersTab from '@/components/projects/ProjectUsersTab';
+import ProjectMilestonesTab from '@/components/projects/ProjectMilestonesTab';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import ListView from '@/components/ListView';
 import ProjectConversation, { ConversationMode } from '@/components/ProjectConversation';
@@ -60,7 +63,7 @@ import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PLAN_LIMITS as CENTRAL_PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 
-type ProjectTab = 'home' | 'board' | 'list' | 'chat';
+type ProjectTab = 'home' | 'board' | 'list' | 'users' | 'milestones' | 'chat';
 
 interface ProjectMember {
   id: number;
@@ -591,6 +594,59 @@ const Projects: React.FC = () => {
     }
   };
 
+  const handleCreateMilestoneFromTab = async (payload: { name: string; date: string; description: string }) => {
+    if (!selectedProjectId) return;
+    const res = await fetch(`/api/milestones/${selectedProjectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.milestone) {
+      setMilestones(prev => [...prev, data.milestone].sort((a, b) => a.date.localeCompare(b.date)));
+      toast({ title: 'Milestone created', description: `"${data.milestone.name}" added to roadmap.` });
+    } else {
+      toast({ title: 'Error', description: data.error || 'Failed to create milestone', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteMilestoneFromTab = async (milestoneId: number) => {
+    if (!selectedProjectId) return;
+    const prev = milestones;
+    setMilestones(curr => curr.filter(m => m.id !== milestoneId));
+    try {
+      const res = await fetch(`/api/milestones/${selectedProjectId}/${milestoneId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      toast({ title: 'Milestone removed' });
+    } catch {
+      setMilestones(prev);
+      toast({ title: 'Error', description: 'Failed to delete milestone', variant: 'destructive' });
+    }
+  };
+
+  const handleChangeProjectMemberRole = async (memberId: number, role: string) => {
+    if (!selectedProject) return;
+    try {
+      const response = await fetch(`/api/projects/${selectedProject.id}/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ role }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(prev => prev.map(p => (p.id === selectedProject.id ? data.project : p)));
+        toast({ title: 'Role updated', description: 'Permissions updated successfully.' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update member role', variant: 'destructive' });
+    }
+  };
+
   const planTier = (user?.subscriptionTier === 'pro'
     ? 'pro'
     : user?.subscriptionTier === 'premium'
@@ -860,6 +916,20 @@ const Projects: React.FC = () => {
     if (!user?.id || projectsLoading || projects.length === 0) return;
     try { localStorage.setItem(`projects_cache_${user.id}`, JSON.stringify(projects)); } catch {}
   }, [projects, projectsLoading, user?.id]);
+
+  useEffect(() => {
+    const projParam = searchParams.get('project');
+    const tabParam = searchParams.get('tab') as ProjectTab | null;
+    if (projParam) {
+      const pid = parseInt(projParam, 10);
+      if (Number.isFinite(pid) && projects.some(p => p.id === pid)) {
+        setSelectedProjectId(pid);
+      }
+    }
+    if (tabParam && ['home', 'board', 'list', 'users', 'milestones', 'chat'].includes(tabParam)) {
+      setCurrentTab(tabParam);
+    }
+  }, [searchParams, projects]);
 
   useEffect(() => {
     const joinCode = searchParams.get('join');
@@ -1979,7 +2049,6 @@ const conversationProps = {
     currentUserId: user?.id,
     tasks: linkableTasks,
     notes: linkableNotes,
-    onInvite: canManage ? () => setShowInviteModal(true) : undefined,
     onOpenTask: (taskId: string) => setSelectedTask(board.tasks.find(t => String(t.id) === taskId) ?? null),
     onOpenNote: (noteId: string) => setSelectedNote(notesCtx.board.tasks.find(n => String(n.id) === noteId) ?? null),
   };
@@ -2102,14 +2171,6 @@ const conversationProps = {
                     <Plus className="h-4 w-4" />
                     {!canAddProject ? 'Limit reached' : 'Add Project'}
                   </button>
-                  <a
-                    href="/settings?tab=account"
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/20 hover:bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
-                    title="Connect and copy tasks or projects from ClickUp"
-                  >
-                    <Link2 className="h-3.5 w-3.5 text-primary" />
-                    Import from ClickUp
-                  </a>
                 </div>
               )}
             </div>
@@ -2185,6 +2246,8 @@ const conversationProps = {
                     { id: 'home', label: 'Home', icon: LayoutDashboard },
                     { id: 'board', label: 'Board', icon: FolderKanban },
                     { id: 'list', label: 'List', icon: List },
+                    { id: 'users', label: 'Users', icon: Users },
+                    { id: 'milestones', label: 'Milestones', icon: Flag },
                     { id: 'chat', label: 'Chat', icon: MessageCircle },
                   ].map(tab => (
                     <button
@@ -2237,6 +2300,44 @@ const conversationProps = {
               {currentTab === 'home' && renderHome()}
               {currentTab === 'board' && renderBoard()}
               {currentTab === 'list' && renderList()}
+              {currentTab === 'users' && selectedProject && (
+                <ProjectUsersTab
+                  projectId={selectedProject.id}
+                  projectName={selectedProject.name}
+                  isOwner={canManage}
+                  canEdit={canEdit}
+                  currentUserId={user?.id}
+                  members={selectedProject.members}
+                  tasks={projectTasks}
+                  notes={projectNotes}
+                  onUpdateTask={(taskId, updates) => updateTask(taskId, updates)}
+                  onUpdateNote={(noteId, updates) => notesCtx.updateTask(noteId, updates)}
+                  onOpenTask={(taskId) => {
+                    const t = board.tasks.find(x => x.id === taskId);
+                    if (t) setSelectedTask(t);
+                  }}
+                  onOpenNote={(noteId) => {
+                    const n = notesCtx.board.tasks.find(x => x.id === noteId);
+                    if (n) setSelectedNote(n);
+                  }}
+                  onInviteClick={() => setShowInviteModal(true)}
+                  onChangeMemberRole={handleChangeProjectMemberRole}
+                  onRemoveMember={(member) => setMemberToRemove(member as ProjectMember)}
+                />
+              )}
+              {currentTab === 'milestones' && selectedProject && (
+                <ProjectMilestonesTab
+                  projectName={selectedProject.name}
+                  canEdit={canEdit}
+                  milestones={milestones}
+                  onCreateMilestone={handleCreateMilestoneFromTab}
+                  onUpdateMilestone={(id, payload) =>
+                    handleUpdateMilestone(id, payload.name, payload.date, payload.description)
+                  }
+                  onToggleMilestone={handleToggleMilestone}
+                  onDeleteMilestone={handleDeleteMilestoneFromTab}
+                />
+              )}
               {currentTab === 'chat' && renderChat()}
             </main>
             </div>

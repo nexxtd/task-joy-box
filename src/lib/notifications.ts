@@ -205,6 +205,8 @@ export interface BuiltAlertItem {
   body: string;
   toastTitle: string;
   toastBody: string;
+  taskId?: string;
+  itemKind?: 'task' | 'note';
 }
 
 /** Build active Normal (Free) and Smart AI (Premium/Pro) alerts from the user's tasks. */
@@ -235,6 +237,8 @@ export const buildActiveAlerts = (
           body: `Task "${task.title}" is due soon!`,
           toastTitle: 'Urgent Deadline',
           toastBody: `Task "${task.title}" is due soon!`,
+          taskId: task.id,
+          itemKind: 'task',
         });
       }
       if (!overdue && diff < 60 * 60 * 1000) {
@@ -245,6 +249,8 @@ export const buildActiveAlerts = (
           body: `Task "${task.title}" is due by ${task.dueTime || 'end of day'} today`,
           toastTitle: 'Due Soon',
           toastBody: `Task "${task.title}" is due within the hour`,
+          taskId: task.id,
+          itemKind: 'task',
         });
       }
       if (overdue) {
@@ -255,6 +261,8 @@ export const buildActiveAlerts = (
           body: `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`,
           toastTitle: 'Overdue',
           toastBody: `Task "${task.title}" is overdue`,
+          taskId: task.id,
+          itemKind: 'task',
         });
       }
     });
@@ -275,6 +283,8 @@ export const buildActiveAlerts = (
         body: msg,
         toastTitle: 'AI Smart Alert',
         toastBody: msg,
+        taskId: quickWin.id,
+        itemKind: 'task',
       });
     }
 
