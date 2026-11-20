@@ -1,0 +1,18 @@
+USE WITH: the clean image (thumb_C_clean.png). Add the text afterwards, or use thumb_A/B if the tool keeps text intact.
+MODE: image-to-image / "enhance" / "upscale", LOW change strength (0.2-0.35). Output 1920x1080 (16:9).
+
+PROMPT
+Enhance this Roblox game thumbnail render WITHOUT changing its content. Keep the exact composition, camera angle, poses, proportions and every object exactly where it is. Only improve rendering quality: cleaner anti-aliased edges, crisper plastic surfaces, smoother soft shadows, a gentle warm rim light on the characters, slightly richer depth and contrast, and a soft natural glow around the explosion. Keep the stylized Roblox look: blocky characters with flat smooth plastic, no realism, no extra texture detail.
+
+MUST STAY EXACTLY THE SAME (these are real in-game assets):
+- The yellow-headed blocky Roblox character on the left: same face, same yellow head and arms, blue torso, yellow-green legs, same pose.
+- The rocket launcher: light-blue tube, purple rings and grips, orange-yellow pointed warhead. Same shape and colors.
+- All blocks: plastic cubes with small SQUARE studs on every face (not round LEGO studs). The blue block is deep royal blue, the red tower blocks are bright pure red.
+- The explosion: bright white-yellow core, orange edges, small sparks, red studded blocks flying out of the tower. Same size and position.
+- The small red-shirt character falling in the top right.
+- The cartoon blue sky with soft clouds and a bright cyan horizon.
+
+NEGATIVE PROMPT
+no new objects, no new characters, no weapons other than the existing launcher, no extra explosions, no fire columns, no smoke clouds, no text, no logos, no watermark, no round LEGO studs, no realistic humans, no detailed textures, no color changes, no different sky, no cropping, no changed poses or faces, no extra fingers or hands.
+
+AFTER: compare it side by side with the original. If ANY object, shape or color changed, discard it and keep the original (Roblox does not allow misleading thumbnails).

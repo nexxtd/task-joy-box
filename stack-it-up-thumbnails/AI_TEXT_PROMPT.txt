@@ -1,0 +1,14 @@
+USE WITH: thumb_D_tight_clean.png   (image edit / image-to-image, low change strength ~0.25-0.3)
+OUTPUT: 1920x1080, 16:9
+
+PROMPT
+Add title text to this Roblox game thumbnail and keep everything else exactly as it is: same yellow blocky Roblox character with the angry grin, same pose, same rocket launcher (light-blue tube, purple rings and grips, orange-yellow pointed warhead), same deep-blue block he stands on, same big round orange-yellow fireball with a bright pale-yellow core, same bright-red blocks with small SQUARE studs bursting out of it, same cyan sky, same camera and crop.
+
+TEXT, in the empty cyan sky in the TOP-LEFT corner (above the character's head, left of the fireball):
+Line 1: "DESTROY" - white with a light-blue gradient at the bottom
+Line 2: "THEIR TOWER!" - bright yellow to orange gradient
+Very bold, chunky, rounded game-title font (Fredoka One / Luckiest Guy style), all caps, thick dark-navy outline, soft drop shadow, tilted about 4 degrees counter-clockwise, lines tightly stacked. Big enough to read on a tiny phone tile: the text block about 45% of the image width and 25% of the image height. It may slightly overlap the soft outer edge of the fireball, but must not cover the character's face, the launcher or the red blocks. Spell exactly: DESTROY THEIR TOWER!
+
+DO NOT: change the explosion (no extra flash, white glow, lens flare, light rays or bloom); add other text, logos or watermarks; add characters, weapons or extra explosions; turn the square studs into round LEGO studs; change faces, colors, the launcher, the pose, the crop or the composition.
+
+AFTER: check spelling, check the studs are still square and nothing else changed.
