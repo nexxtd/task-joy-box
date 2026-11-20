@@ -46,16 +46,16 @@ const MobileNav: React.FC = () => {
   const primaryTabs = [
     { icon: LayoutDashboard, label: T.nav_dashboard, path: '/' },
     { icon: FolderKanban, label: T.nav_projects, path: '/projects' },
-    { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
     { icon: CalendarDays, label: T.nav_calendar, path: '/calendar' },
+    { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
   ];
 
   const moreItems = [
-    { icon: BarChart3, label: T.nav_insights, path: '/insights' },
-    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
     { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
+    { icon: BarChart3, label: T.nav_insights, path: '/insights' },
+    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
     { icon: CreditCard, label: T.nav_pricing, path: '/pricing' },

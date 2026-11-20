@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -69,6 +69,9 @@ interface GalleryTemplateItem {
   raw: TaskTemplate | null;
 }
 
+// Last loaded gallery, so reopening Templates paints instantly while it refreshes.
+let templatesCache: { myTasks: TaskTemplate[]; myNotes: TaskTemplate[]; pubTasks: TaskTemplate[]; pubNotes: TaskTemplate[] } | null = null;
+
 export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -80,11 +83,11 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const initialApplyToId = searchParams.get('applyTo') || '';
   const initialTagParam = searchParams.get('tag') || '';
 
-  const [loading, setLoading] = useState(true);
-  const [myTaskTemplates, setMyTaskTemplates] = useState<TaskTemplate[]>([]);
-  const [myNoteTemplates, setMyNoteTemplates] = useState<TaskTemplate[]>([]);
-  const [publicTaskTemplates, setPublicTaskTemplates] = useState<TaskTemplate[]>([]);
-  const [publicNoteTemplates, setPublicNoteTemplates] = useState<TaskTemplate[]>([]);
+  const [loading, setLoading] = useState(!templatesCache);
+  const [myTaskTemplates, setMyTaskTemplates] = useState<TaskTemplate[]>(() => templatesCache?.myTasks ?? []);
+  const [myNoteTemplates, setMyNoteTemplates] = useState<TaskTemplate[]>(() => templatesCache?.myNotes ?? []);
+  const [publicTaskTemplates, setPublicTaskTemplates] = useState<TaskTemplate[]>(() => templatesCache?.pubTasks ?? []);
+  const [publicNoteTemplates, setPublicNoteTemplates] = useState<TaskTemplate[]>(() => templatesCache?.pubNotes ?? []);
 
   // Filters on left rail
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,7 +114,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const [savingCopy, setSavingCopy] = useState(false);
 
   const loadAllTemplates = useCallback(async () => {
-    setLoading(true);
+    if (!templatesCache) setLoading(true);
     try {
       const [myTasks, myNotes, pubTasks, pubNotes] = await Promise.all([
         fetchTemplates().catch(() => [] as TaskTemplate[]),
@@ -123,6 +126,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
       setMyNoteTemplates(myNotes);
       setPublicTaskTemplates(pubTasks);
       setPublicNoteTemplates(pubNotes);
+      templatesCache = { myTasks, myNotes, pubTasks, pubNotes };
     } finally {
       setLoading(false);
     }
@@ -271,8 +275,10 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
     return items;
   }, [myTaskTemplates, myNoteTemplates, publicTaskTemplates, publicNoteTemplates, user?.id, user?.name]);
 
+  // Filter against a deferred query so typing never waits on re-rendering the grid.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredTemplates = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     return allTemplates.filter(item => {
       if (item.source !== 'mine' && item.isPublic === false) return false;
       // Private templates only belong in "My Templates" — keep them hidden from general browse tabs
@@ -299,7 +305,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
       }
       return true;
     });
-  }, [allTemplates, typeFilter, sourceFilter, priorityFilter, selectedTags, searchQuery]);
+  }, [allTemplates, typeFilter, sourceFilter, priorityFilter, selectedTags, deferredSearchQuery]);
 
   // Keep a valid selected template for the live Preview pane
   useEffect(() => {
@@ -516,7 +522,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
   };
 
   return (
-    <div className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-background ${embedded ? 'rounded-2xl border border-border shadow-sm min-h-[680px]' : ''}`}>
+    <div className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-background ${embedded ? 'rounded-2xl border border-border shadow-sm min-h-[560px] lg:h-[calc(100dvh-6rem)]' : ''}`}>
       {/* Header */}
       <header className="px-4 sm:px-6 py-3.5 border-b border-border bg-card flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -747,7 +753,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
               {filteredTemplates.map(item => {
                 const isSelected = selectedTemplate?.uid === item.uid;
                 const priorityMeta =
@@ -762,7 +768,7 @@ export const TemplatesBrowser: React.FC<{ embedded?: boolean }> = ({ embedded = 
                       setSelectedUid(item.uid);
                       setExistingPickerOpen(false);
                     }}
-                    className={`text-left p-4 rounded-2xl border transition-all flex flex-col gap-2.5 ${
+                    className={`text-left p-4 rounded-2xl border transition-[border-color,background-color,box-shadow] duration-150 flex flex-col gap-2.5 [content-visibility:auto] [contain-intrinsic-size:auto_180px] ${
                       isSelected
                         ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm'
                         : 'border-border bg-card hover:border-primary/40 hover:shadow-xs'

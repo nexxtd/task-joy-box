@@ -958,7 +958,7 @@ const SettingsPage: React.FC = () => {
         </div>
 
         <div className="settings-panel-content flex-1 overflow-y-auto p-4">
-          <div className={activeSection === 'templates' ? 'max-w-6xl' : 'max-w-2xl'}>
+          <div className={activeSection === 'templates' ? 'w-full' : 'max-w-3xl'}>
           {activeSection === 'appearance' && (
             <div className="space-y-4">
               <div>
@@ -1298,9 +1298,6 @@ const SettingsPage: React.FC = () => {
                 )}
               </div>
 
-              {(savingSmart || savingEmail) && (
-                <p className="text-xs text-muted-foreground" role="status">Saving…</p>
-              )}
               {notifError && (
                 <p className="text-xs text-destructive" role="alert">{notifError}</p>
               )}

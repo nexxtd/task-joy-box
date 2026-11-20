@@ -2750,7 +2750,7 @@ const Tasks: React.FC = () => {
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="max-w-7xl mx-auto space-y-2 pb-24">
+        <div className="w-full space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
@@ -5916,10 +5916,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div
-        className="relative z-10 flex flex-col lg:flex-row items-start justify-center gap-4 w-full max-w-6xl transition-all duration-300"
+        className="relative z-10 flex flex-col lg:flex-row items-stretch justify-center gap-4 w-full max-w-6xl max-h-[92vh] lg:h-[92vh] overflow-y-auto lg:overflow-hidden animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
-        <div className="relative flex-1 min-w-0 w-full bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto p-5 space-y-6 transition-all duration-300">
+        <div className="relative flex-1 min-w-0 w-full bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain p-5 space-y-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0 pt-1">
             {editingTemplateMeta && (

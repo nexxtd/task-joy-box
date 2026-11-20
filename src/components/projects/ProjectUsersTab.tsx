@@ -21,6 +21,7 @@ import { Task } from '@/types/board';
 import { getTaskAssignees } from '@/components/shared/AssignedBadge';
 import { toast } from '@/hooks/use-toast';
 import { dateLocale } from '@/i18n/format';
+import { RolePermissionSelect } from './RolePermissionSelect';
 
 export interface ProjectUsersTabMember {
   id: number;
@@ -98,7 +99,6 @@ export const ProjectUsersTab: React.FC<ProjectUsersTabProps> = ({
   const [newNoteText, setNewNoteText] = useState<Record<number, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<number | null>(null);
   const [editingNote, setEditingNote] = useState<{ noteId: number; userId: number; text: string } | null>(null);
-  const [busyRoleUserId, setBusyRoleUserId] = useState<number | null>(null);
 
   const memberStats = useMemo(() => {
     const map = new Map<number, { assignedTasks: Task[]; assignedNotes: Task[]; completedCount: number }>();
@@ -488,7 +488,7 @@ export const ProjectUsersTab: React.FC<ProjectUsersTabProps> = ({
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-500"
+                          className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
                           style={{ width: `${completionPct}%` }}
                         />
                       </div>
@@ -531,26 +531,12 @@ export const ProjectUsersTab: React.FC<ProjectUsersTabProps> = ({
 
                     {isOwner && member.role !== 'owner' && (
                       <div className="flex items-center gap-1.5">
-                        <select
-                          aria-label={`Change role for ${member.name}`}
-                          disabled={busyRoleUserId === member.id}
+                        <RolePermissionSelect
+                          size="sm"
+                          ariaLabel={`Change role for ${member.name}`}
                           value={member.role}
-                          onChange={async e => {
-                            const nextRole = e.target.value;
-                            setBusyRoleUserId(member.id);
-                            try {
-                              await onChangeMemberRole(member.id, nextRole);
-                            } finally {
-                              setBusyRoleUserId(null);
-                            }
-                          }}
-                          className="rounded-xl border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none focus:border-primary"
-                        >
-                          <option value="view">View</option>
-                          <option value="edit">Edit</option>
-                          <option value="full edit">Full Edit</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                          onChange={nextRole => { void onChangeMemberRole(member.id, nextRole); }}
+                        />
                         <button
                           type="button"
                           onClick={() => onRemoveMember(member)}

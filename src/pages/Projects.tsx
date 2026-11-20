@@ -1,7 +1,7 @@
 import { useLanguage } from '@/context/LanguageContext';
 import { dateLocale } from '@/i18n/format';
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { flushSync } from 'react-dom';
+import { flushSync, createPortal } from 'react-dom';
 import { DragDropContext, Droppable, DropResult, Draggable, DragStart, BeforeCapture } from '@hello-pangea/dnd';
 import {
   Calendar,
@@ -55,12 +55,17 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
+import { useWidgetGrid, cellStyle, type GridWidgetDef } from '@/hooks/useWidgetGrid';
+import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
+import { getTaskAssignees } from '@/components/shared/AssignedBadge';
+import { PROJECT_HOME_WIDGETS, PROJECT_HOME_STORAGE_KEY, defaultProjectHomeLayout, type ProjectHomeWidgetType } from '@/components/projects/projectHomeWidgets';
 import { Label, LabelColor, DEFAULT_LABELS, Task } from '@/types/board';
 import { fetchTags, createTag, deleteTag, updateTag } from '@/services/tagService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ROLE_OPTIONS, RolePermissionSelect } from '@/components/projects/RolePermissionSelect';
 import { PLAN_LIMITS as CENTRAL_PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 
 type ProjectTab = 'home' | 'board' | 'list' | 'users' | 'milestones' | 'chat';
@@ -90,13 +95,6 @@ const PROJECT_COLOR_OPTIONS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b8
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 15, pro: 20 };
 const COLUMN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 10, premium: 15, pro: 20 };
 const MEMBER_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 10, premium: 15, pro: 20 };
-const ROLE_OPTIONS = [
-  { value: 'view', label: 'View only', description: 'Read-only access — can view tasks, milestones and project details, but can\'t create or edit anything.', color: '#6b7280' },
-  { value: 'edit', label: 'Edit', description: 'Can create, edit and complete tasks and milestones, but can\'t manage members or delete the project.', color: '#3b82f6' },
-  { value: 'full edit', label: 'Full Edit', description: 'Everything in Edit, plus full board control — assign, label and organise tasks across columns.', color: '#8b5cf6' },
-  { value: 'admin', label: 'Admin', description: 'Everything in Full Edit — the highest collaborator role below the project owner.', color: '#f59e0b' },
-  { value: 'owner', label: 'Owner', description: 'Full control — manages members, invites, project settings, archiving and deletion.', color: '#10b981' },
-];
 
 const Projects: React.FC = () => {
   // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
@@ -594,20 +592,26 @@ const Projects: React.FC = () => {
     }
   };
 
+  // Optimistic: the milestone shows immediately with a temporary id, then is
+  // swapped for the saved row once the server answers.
   const handleCreateMilestoneFromTab = async (payload: { name: string; date: string; description: string }) => {
     if (!selectedProjectId) return;
-    const res = await fetch(`/api/milestones/${selectedProjectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.milestone) {
-      setMilestones(prev => [...prev, data.milestone].sort((a, b) => a.date.localeCompare(b.date)));
-      toast({ title: 'Milestone created', description: `"${data.milestone.name}" added to roadmap.` });
-    } else {
-      toast({ title: 'Error', description: data.error || 'Failed to create milestone', variant: 'destructive' });
+    const tempId = -Date.now();
+    const sortByDate = (list: any[]) => [...list].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    setMilestones(prev => sortByDate([...prev, { id: tempId, projectId: selectedProjectId, completed: false, ...payload } as any]));
+    try {
+      const res = await fetch(`/api/milestones/${selectedProjectId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.milestone) throw new Error(data.error || 'Failed to create milestone');
+      setMilestones(prev => sortByDate(prev.map(m => (m.id === tempId ? data.milestone : m))));
+    } catch (err) {
+      setMilestones(prev => prev.filter(m => m.id !== tempId));
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create milestone', variant: 'destructive' });
     }
   };
 
@@ -621,28 +625,40 @@ const Projects: React.FC = () => {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Delete failed');
-      toast({ title: 'Milestone removed' });
     } catch {
       setMilestones(prev);
       toast({ title: 'Error', description: 'Failed to delete milestone', variant: 'destructive' });
     }
   };
 
+  const applyMemberRoleLocally = (projectId: number, memberId: number, role: string) => {
+    setProjects(prev => prev.map(p => (p.id === projectId
+      ? { ...p, members: p.members.map(m => (m.id === memberId ? { ...m, role: role as ProjectMember['role'] } : m)) }
+      : p)));
+  };
+
+  // Optimistic: the UI updates instantly, the server call runs in the background.
   const handleChangeProjectMemberRole = async (memberId: number, role: string) => {
     if (!selectedProject) return;
+    const projectId = selectedProject.id;
+    const previousRole = selectedProject.members.find(m => m.id === memberId)?.role;
+    applyMemberRoleLocally(projectId, memberId, role);
+    setSelectedMember(prev => (prev && prev.id === memberId ? { ...prev, role: role as ProjectMember['role'] } : prev));
     try {
-      const response = await fetch(`/api/projects/${selectedProject.id}/members/${memberId}`, {
+      const response = await fetch(`/api/projects/${projectId}/members/${memberId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ role }),
       });
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(prev => prev.map(p => (p.id === selectedProject.id ? data.project : p)));
-        toast({ title: 'Role updated', description: 'Permissions updated successfully.' });
-      }
+      if (!response.ok) throw new Error('failed');
+      const data = await response.json();
+      if (data?.project) setProjects(prev => prev.map(p => (p.id === projectId ? data.project : p)));
     } catch {
+      if (previousRole) {
+        applyMemberRoleLocally(projectId, memberId, previousRole);
+        setSelectedMember(prev => (prev && prev.id === memberId ? { ...prev, role: previousRole } : prev));
+      }
       toast({ title: 'Error', description: 'Failed to update member role', variant: 'destructive' });
     }
   };
@@ -845,6 +861,18 @@ const Projects: React.FC = () => {
       }),
     [projectTasks],
   );
+
+  // Customizable project home, same widget engine as Dashboard and Insights.
+  const projectHomeGrid = useWidgetGrid<ProjectHomeWidgetType>({
+    defs: PROJECT_HOME_WIDGETS,
+    storageKey: PROJECT_HOME_STORAGE_KEY,
+    defaultLayout: defaultProjectHomeLayout,
+    tier: 'pro',
+  });
+  useEffect(() => {
+    // Let drag-to-edge auto-scroll use the page's real scroll container.
+    (projectHomeGrid.scrollElRef as React.MutableRefObject<HTMLElement | null>).current = mainScrollRef.current;
+  });
 
   useEffect(() => {
     if (!user?.id) { setProjectsLoading(false); return; }
@@ -1464,7 +1492,8 @@ const Projects: React.FC = () => {
                 <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                   {items.map((project, idx) => (
                     <Draggable key={project.id} draggableId={`project-${project.id}`} index={idx} isDragDisabled={editingProjectId === project.id}>
-                      {(dragProvided, dragSnapshot) => (
+                      {(dragProvided, dragSnapshot) => {
+                        const row = (
                         <div
                           ref={dragProvided.innerRef}
                           {...dragProvided.draggableProps}
@@ -1528,7 +1557,11 @@ const Projects: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      )}
+                        );
+                        // Portal the dragged row to <body> so ancestor transforms/filters can't
+                        // offset rbd's position:fixed placement — keeps the row under the cursor.
+                        return dragSnapshot.isDragging && typeof document !== 'undefined' ? createPortal(row, document.body) : row;
+                      }}
                     </Draggable>
                   ))}
                   {provided.placeholder}
@@ -1603,265 +1636,534 @@ const Projects: React.FC = () => {
     );
   };
 
-  const renderHome = () => (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-          {/* Status badges + view-only notice */}
-          {(selectedProject?.completed || selectedProject?.archived || !canEdit) && (
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              {selectedProject?.completed && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5" />Completed
-                </span>
-              )}
-              {selectedProject?.archived && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
-                  <Lock className="h-3.5 w-3.5" />Archived
-                </span>
-              )}
-              {!canEdit && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600">
-                  <EyeOff className="h-3.5 w-3.5" />View only
-                </span>
-              )}
-            </div>
+  const renderMembersList = () => (
+    <div className="space-y-2">
+      {selectedProject?.members.length ? selectedProject.members.map(member => (
+        <button
+          key={member.id}
+          onClick={() => {
+            if (canManage) {
+              setSelectedMember(member);
+            }
+          }}
+          className={cn(
+            'group flex w-full items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-colors',
+            canManage ? 'hover:border-primary/40 hover:bg-muted/50 cursor-pointer' : 'cursor-default'
           )}
+        >
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background flex-shrink-0">
+            {member.name.slice(0, 1).toUpperCase()}
+          </div>
+          <span className="text-foreground font-medium truncate">{member.name}</span>
+          <span className="text-muted-foreground capitalize ml-auto flex-shrink-0">{member.role}</span>
+        </button>
+      )) : (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+          No members yet
+        </div>
+      )}
+    </div>
+  );
 
-          <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
-            <div className="space-y-3 xl:pt-1">
-              <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Members</label>
-              <div className="space-y-2">
-                {selectedProject?.members.length ? selectedProject.members.map(member => (
-                  <button
-                    key={member.id}
-                    onClick={() => {
-                      if (canManage) {
-                        setSelectedMember(member);
-                      }
-                    }}
-                    className={cn(
-                      'group flex w-full items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-all',
-                      canManage ? 'hover:border-primary/40 hover:bg-muted/50 cursor-pointer' : 'cursor-default'
-                    )}
-                  >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background flex-shrink-0">
-                      {member.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <span className="text-foreground font-medium truncate">{member.name}</span>
-                    <span className="text-muted-foreground capitalize ml-auto flex-shrink-0">{member.role}</span>
-                  </button>
-                )) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
-                    No members yet
-                  </div>
-                )}
+  const renderJoinRequests = () => {
+    if (!canManage) {
+      return <EmptyState title="Owner only" description="Only the project owner can review join requests." />;
+    }
+    if (joinRequests.length === 0) {
+      return <EmptyState title="No pending requests" description="New requests to join will show up here." />;
+    }
+    return (
+      <div className="space-y-2">
+        {joinRequests.map(request => (
+          <div key={request.id} className="rounded-2xl border border-border bg-muted/20 px-3 py-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary flex-shrink-0">
+                {request.name.slice(0, 1).toUpperCase()}
               </div>
-              {canManage && (
-                <div className="pt-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Join Requests</label>
-                    {joinRequests.length > 0 && (
-                      <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                        {joinRequests.length}
-                      </span>
-                    )}
-                  </div>
-                  {joinRequestsLoading ? (
-                    <div className="rounded-2xl border border-border bg-muted/20 p-4 flex items-center justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : joinRequests.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
-                      No pending requests
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {joinRequests.map(request => (
-                        <div key={request.id} className="rounded-2xl border border-border bg-card px-3 py-2.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary flex-shrink-0">
-                              {request.name.slice(0, 1).toUpperCase()}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-foreground truncate">{request.name}</p>
-                              <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 mt-2">
-                            <button
-                              onClick={() => handleJoinDecision(request.id, 'approve')}
-                              disabled={joinDecisionId !== null}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-2 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all"
-                            >
-                              {joinDecisionId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleJoinDecision(request.id, 'deny')}
-                              disabled={joinDecisionId !== null}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-destructive/30 px-2 py-2 text-[11px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-all"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              Deny
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-foreground truncate">{request.name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
+              </div>
             </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => handleJoinDecision(request.id, 'approve')}
+                disabled={joinDecisionId !== null}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-2 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Approve
+              </button>
+              <button
+                onClick={() => handleJoinDecision(request.id, 'deny')}
+                disabled={joinDecisionId !== null}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-destructive/30 px-2 py-2 text-[11px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+                Deny
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Project Description</label>
-              <textarea
-                value={selectedProject?.description || ''}
-                onChange={e => { if (canEdit) updateSelectedProject({ description: e.target.value }); }}
-                readOnly={!canEdit || Boolean(selectedProject?.archived || selectedProject?.completed)}
-                rows={4}
-                className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75"
-                placeholder={canEdit ? 'What is this project about?' : 'No description'}
+  const renderProjectDetails = () => (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {selectedProject?.completed && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
+            <CheckCircle2 className="h-3.5 w-3.5" />Completed
+          </span>
+        )}
+        {selectedProject?.archived && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
+            <Lock className="h-3.5 w-3.5" />Archived
+          </span>
+        )}
+        {!canEdit && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600">
+            <EyeOff className="h-3.5 w-3.5" />View only
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground capitalize">
+          Your role: {currentUserRole}
+        </span>
+      </div>
+      <textarea
+        value={selectedProject?.description || ''}
+        onChange={e => { if (canEdit) updateSelectedProject({ description: e.target.value }); }}
+        readOnly={!canEdit || Boolean(selectedProject?.archived || selectedProject?.completed)}
+        rows={3}
+        className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75 resize-none"
+        placeholder={canEdit ? 'What is this project about?' : 'No description'}
+      />
+    </div>
+  );
+
+  const renderMilestoneList = () => (
+    <div className="space-y-2">
+      {canEdit && (
+        <button
+          onClick={() => {
+            setEditingMilestoneId(null);
+            setNewMilestoneName('');
+            setNewMilestoneDate('');
+            setNewMilestoneDesc('');
+            setShowMilestonePopup(true);
+          }}
+          className="w-full rounded-xl border border-dashed border-border bg-muted/20 px-3 py-2 text-xs font-semibold text-primary hover:bg-muted/40 transition-colors"
+        >
+          + Add milestone
+        </button>
+      )}
+      {milestones.length > 0 ? (
+        milestones.map(milestone => (
+          <div key={milestone.id} className={`flex items-start justify-between rounded-xl border p-3 transition-colors ${milestone.completed ? 'border-label-green/20 bg-label-green/5' : 'border-border bg-muted/20 hover:bg-muted/30'}`}>
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              <div onClick={e => e.stopPropagation()} className="mt-0.5">
+                <CircleToggle
+                  completed={!!milestone.completed}
+                  onClick={() => handleToggleMilestone(milestone)}
+                  size="sm"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`text-xs font-semibold truncate ${milestone.completed ? 'text-muted-foreground/60 line-through' : 'text-foreground'}`}>{milestone.name}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {new Date(milestone.date + 'T12:00:00').toLocaleDateString(dateLocale())}
+                </p>
+                {milestone.description && <p className={`text-[10px] mt-1 break-words ${milestone.completed ? 'text-muted-foreground/50' : 'text-muted-foreground/80'}`}>{milestone.description}</p>}
+              </div>
+            </div>
+            {canEdit && (
+              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setEditingMilestoneId(milestone.id);
+                    setNewMilestoneName(milestone.name);
+                    setNewMilestoneDate(milestone.date);
+                    setNewMilestoneDesc(milestone.description || '');
+                    setShowMilestonePopup(true);
+                  }}
+                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                  title="Edit milestone"
+                >
+                  <SquarePen className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => { void handleDeleteMilestoneFromTab(milestone.id); }}
+                  className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  title="Delete milestone"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))
+      ) : (
+        <EmptyState title="No milestones yet" description={canEdit ? 'Add checkpoints to track project progress.' : 'No milestones have been set for this project.'} />
+      )}
+    </div>
+  );
+
+  const renderTaskRows = (list: typeof projectTasks, emptyTitle: string, emptyDesc: string, tone: 'muted' | 'danger' = 'muted') => (
+    list.length === 0 ? <EmptyState title={emptyTitle} description={emptyDesc} /> : (
+      <div className="space-y-1.5">
+        {list.map(task => (
+          <button
+            key={task.id}
+            onClick={() => setSelectedTask(task)}
+            className={cn(
+              'w-full flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-colors',
+              tone === 'danger' ? 'border-destructive/20 bg-destructive/5 hover:bg-destructive/10' : 'border-border bg-muted/20 hover:bg-muted/40',
+            )}
+          >
+            <span className="text-xs font-medium text-foreground truncate">{task.title || 'Untitled task'}</span>
+            {task.dueDate && (
+              <span className={cn('text-[10px] font-semibold flex-shrink-0', tone === 'danger' ? 'text-destructive' : 'text-muted-foreground')}>
+                {new Date(task.dueDate + (task.dueDate.length <= 10 ? 'T12:00:00' : '')).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    )
+  );
+
+  const renderBarList = (rows: Array<{ key: string; label: string; value: number; color?: string }>, emptyTitle: string) => {
+    const max = Math.max(1, ...rows.map(r => r.value));
+    if (rows.length === 0 || rows.every(r => r.value === 0)) {
+      return <EmptyState title={emptyTitle} description="Add tasks to this project to see the breakdown." />;
+    }
+    return (
+      <div className="space-y-2.5">
+        {rows.map(row => (
+          <div key={row.key} className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-foreground truncate">{row.label}</span>
+              <span className="font-semibold text-muted-foreground">{row.value}</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full transition-[width] duration-500 ease-out"
+                style={{ width: `${(row.value / max) * 100}%`, backgroundColor: row.color || 'hsl(var(--primary))' }}
               />
             </div>
           </div>
-        </div>
+        ))}
+      </div>
+    );
+  };
 
-        <div className="grid gap-4">
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-foreground">Summary Stats</h3>
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard value={totalTasks} label="Total tasks" />
-              <StatCard value={completedTasks} label="Completed" />
-              <StatCard value={overdueTasks} label="Overdue" />
-              <StatCard value={selectedProject?.memberCount || 0} label="Members" />
-            </div>
+  const renderProjectWidget = (type: ProjectHomeWidgetType): React.ReactNode => {
+    switch (type) {
+      case 'project-details':
+        return renderProjectDetails();
+      case 'summary-stats':
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard value={totalTasks} label="Total tasks" />
+            <StatCard value={completedTasks} label="Completed" />
+            <StatCard value={overdueTasks} label="Overdue" />
+            <StatCard value={selectedProject?.memberCount || selectedProject?.members.length || 0} label="Members" />
           </div>
-
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Progress Overview</h3>
-            <div className="mb-3 flex items-end justify-between">
-              <div>
-                <div className="text-3xl font-semibold text-foreground">{progressPct}%</div>
-                <div className="text-xs text-muted-foreground">Completed vs total items</div>
-              </div>
-              <Users className="h-5 w-5 text-muted-foreground" />
+        );
+      case 'progress-overview':
+        return (
+          <div>
+            <div className="mb-3">
+              <div className="text-3xl font-semibold text-foreground">{progressPct}%</div>
+              <div className="text-xs text-muted-foreground">Completed vs total items</div>
             </div>
             <div className="h-3 rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progressPct}%` }} />
+              <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500 ease-out" style={{ width: `${progressPct}%` }} />
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
               {completedTasks} completed, {Math.max(0, totalTasks - completedTasks)} remaining
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
-              {milestonesLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-              {canEdit && (
-              <button
-                onClick={() => {
-                  setNewMilestoneName('');
-                  setNewMilestoneDate('');
-                  setNewMilestoneDesc('');
-                  setShowMilestonePopup(true);
-                }}
-                className="text-xs font-semibold text-primary hover:underline"
-              >
-                Add milestone
-              </button>
-            )}
+        );
+      case 'members':
+        return renderMembersList();
+      case 'milestones':
+        return renderMilestoneList();
+      case 'next-milestone': {
+        const next = [...milestones]
+          .filter(m => !m.completed)
+          .sort((a, b) => a.date.localeCompare(b.date))[0];
+        if (!next) return <EmptyState title="No open milestones" description="Every milestone is done, or none are set yet." />;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((new Date(next.date + 'T00:00:00').getTime() - today.getTime()) / 86400000);
+        return (
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground truncate">{next.name}</p>
+            <p className={cn('text-3xl font-semibold', days < 0 ? 'text-destructive' : 'text-foreground')}>
+              {days < 0 ? `${Math.abs(days)}d late` : days === 0 ? 'Today' : `${days}d`}
+            </p>
+            <p className="text-xs text-muted-foreground">{new Date(next.date + 'T12:00:00').toLocaleDateString(dateLocale())}</p>
           </div>
-
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {milestones.length > 0 ? (
-              milestones.map(milestone => (
-                <div key={milestone.id} className={`flex items-start justify-between rounded-xl border p-3 transition-all ${milestone.completed ? 'border-label-green/20 bg-label-green/5' : 'border-border bg-muted/10 hover:bg-muted/20'}`}>
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
-                    <div onClick={e => e.stopPropagation()} className="mt-0.5">
-                      <CircleToggle
-                        completed={!!milestone.completed}
-                        onClick={() => handleToggleMilestone(milestone)}
-                        size="sm"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-xs font-semibold truncate ${milestone.completed ? 'text-muted-foreground/60 line-through' : 'text-foreground'}`}>{milestone.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {new Date(milestone.date + 'T12:00:00').toLocaleDateString(dateLocale())}
-                      </p>
-                      {milestone.description && <p className={`text-[10px] mt-1 break-words ${milestone.completed ? 'text-muted-foreground/50' : 'text-muted-foreground/80'}`}>{milestone.description}</p>}
-                    </div>
-                  </div>
-                  {canEdit && (
-                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                      <button
-                        onClick={() => {
-                          setEditingMilestoneId(milestone.id);
-                          setNewMilestoneName(milestone.name);
-                          setNewMilestoneDate(milestone.date);
-                          setNewMilestoneDesc(milestone.description || '');
-                          setShowMilestonePopup(true);
-                        }}
-                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
-                        title="Edit milestone"
-                      >
-                        <SquarePen className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!selectedProjectId) return;
-                          try {
-                            await fetch(`/api/milestones/${selectedProjectId}/${milestone.id}`, {
-                              method: 'DELETE',
-                              credentials: 'include',
-                            });
-                            setMilestones(prev => prev.filter(m => m.id !== milestone.id));
-                          } catch {
-                            toast({ title: 'Error', description: 'Failed to delete milestone' });
-                          }
-                        }}
-                        className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Delete milestone"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            ) : (
-              <EmptyState title="No milestones yet" description={canEdit ? 'Add checkpoints to track project progress.' : 'No milestones have been set for this project.'} />
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            {recentActivity.length > 0 ? recentActivity.map(activity => (
+        );
+      }
+      case 'recent-activity':
+        return recentActivity.length > 0 ? (
+          <div className="space-y-2">
+            {recentActivity.map(activity => (
               <div key={activity.id} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
                 <Clock3 className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
-                  <p className="text-sm text-foreground">{activity.text}</p>
+                  <p className="text-sm text-foreground break-words">{activity.text}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {activity.actor && <><span className="font-semibold">{activity.actor}</span> · </>}
-                    {new Date(activity.time).toLocaleString(dateLocale())}
+                    <span className="font-semibold">{activity.actor || 'Someone'}</span> · {new Date(activity.time).toLocaleString(dateLocale())}
                   </p>
                 </div>
               </div>
-            )) : <EmptyState title="No recent activity" description="Changes and updates will appear here." />}
+            ))}
           </div>
+        ) : <EmptyState title="No recent activity" description="Changes and updates will appear here." />;
+      case 'task-status': {
+        const counts = new Map<string, number>();
+        projectTasks.forEach(task => counts.set(task.columnId, (counts.get(task.columnId) || 0) + 1));
+        const rows = board.columns
+          .filter(col => counts.has(col.id))
+          .map(col => ({ key: col.id, label: col.title, value: counts.get(col.id) || 0 }));
+        return renderBarList(rows, 'No tasks yet');
+      }
+      case 'priority-breakdown': {
+        const open = projectTasks.filter(task => !task.completed);
+        const rows = ([
+          ['urgent', 'Urgent', '#ef4444'],
+          ['high', 'High', '#f97316'],
+          ['medium', 'Medium', '#eab308'],
+          ['low', 'Low', '#3b82f6'],
+          ['none', 'No priority', '#9ca3af'],
+        ] as const).map(([key, label, color]) => ({
+          key, label, color, value: open.filter(task => (task.priority || 'none') === key).length,
+        }));
+        return renderBarList(rows, 'No open tasks');
+      }
+      case 'upcoming-deadlines': {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const horizon = now.getTime() + 14 * 86400000;
+        const list = projectTasks
+          .filter(task => !task.completed && task.dueDate)
+          .filter(task => {
+            const due = new Date(task.dueDate as string).getTime();
+            return due >= now.getTime() && due <= horizon;
+          })
+          .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
+          .slice(0, 20);
+        return renderTaskRows(list, 'Nothing due soon', 'No open tasks are due in the next two weeks.');
+      }
+      case 'overdue-tasks': {
+        const now = new Date();
+        const list = projectTasks
+          .filter(task => !task.completed && task.dueDate && new Date(task.dueDate) < now)
+          .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
+          .slice(0, 20);
+        return renderTaskRows(list, 'Nothing overdue', 'Every open task is on schedule.', 'danger');
+      }
+      case 'project-notes': {
+        const list = [...projectNotes]
+          .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+          .slice(0, 12);
+        return list.length === 0 ? <EmptyState title="No notes yet" description="Notes added to this project will appear here." /> : (
+          <div className="space-y-1.5">
+            {list.map(note => (
+              <button
+                key={note.id}
+                onClick={() => setSelectedNote(note)}
+                className="w-full flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2 text-left hover:bg-muted/40 transition-colors"
+              >
+                <StickyNote className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                <span className="text-xs font-medium text-foreground truncate flex-1">{note.title || 'Untitled note'}</span>
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                  {new Date(note.updatedAt || note.createdAt).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}
+                </span>
+              </button>
+            ))}
+          </div>
+        );
+      }
+      case 'team-workload': {
+        const members = selectedProject?.members || [];
+        const rows = members.map(member => {
+          const mine = projectTasks.filter(task => getTaskAssignees(task).some(a => a.id === member.id));
+          return { member, open: mine.filter(t => !t.completed).length, done: mine.filter(t => t.completed).length };
+        });
+        if (rows.length === 0) return <EmptyState title="No members yet" description="Invite teammates to share the work." />;
+        const max = Math.max(1, ...rows.map(r => r.open + r.done));
+        return (
+          <div className="space-y-2.5">
+            {rows.map(({ member, open, done }) => (
+              <div key={member.id} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground truncate">{member.name}</span>
+                  <span className="text-muted-foreground">{open} open · {done} done</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                  <div className="h-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${(done / max) * 100}%` }} />
+                  <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${(open / max) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case 'join-requests':
+        return renderJoinRequests();
+      default:
+        return null;
+    }
+  };
+
+  const renderHome = () => (
+    <div className="space-y-4 animate-page-in">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-foreground truncate">Project Home</h2>
+          <p className="text-xs text-muted-foreground">Drag, resize and add widgets to make this page yours.</p>
         </div>
+        <button
+          onClick={() => projectHomeGrid.setShowCustomize(true)}
+          aria-label="Customize project home"
+          className="inline-flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors flex-shrink-0"
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          <span className="hidden sm:inline">Customize Home</span>
+        </button>
       </div>
+
+      {projectHomeGrid.layout.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-10 text-center">
+          <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/60" />
+          <p className="mt-3 text-sm font-semibold text-foreground">Your project home is empty</p>
+          <p className="text-xs text-muted-foreground mt-1 mb-4">Open Customize Home to add widgets.</p>
+          <button
+            onClick={() => projectHomeGrid.setShowCustomize(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" /> Add widgets
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Desktop 12-column grid, same engine as Dashboard and Insights */}
+          <div ref={projectHomeGrid.gridRef} className="hidden md:block relative" style={{ height: projectHomeGrid.gridHeight }}>
+            {(projectHomeGrid.previewLayout ?? projectHomeGrid.layout).map(widget => {
+              const def = PROJECT_HOME_WIDGETS.find(d => d.type === widget.type);
+              const accent = def?.accent || 'label-blue';
+              const isDisplaced = projectHomeGrid.displacedIds.has(widget.id);
+              const dragging = projectHomeGrid.activeDragId === widget.id;
+              return (
+                <div
+                  key={widget.id}
+                  className={`relative group/widget rounded-2xl overflow-hidden flex flex-col ${isDisplaced ? 'animate-widget-flash' : ''} ${dragging ? 'z-10' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    ...cellStyle(widget),
+                    background: 'hsl(var(--card))',
+                    border: dragging ? '2px dashed hsl(var(--primary) / 0.55)' : '1px solid hsl(var(--border))',
+                    boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
+                    transition: projectHomeGrid.suppressMotion || dragging
+                      ? 'none'
+                      : 'left 180ms cubic-bezier(0.22, 1, 0.36, 1), top 180ms cubic-bezier(0.22, 1, 0.36, 1), width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1 select-none shrink-0">
+                    <div className={`flex items-center gap-0.5 min-w-0 transition-opacity ${projectHomeGrid.draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                      <button
+                        onPointerDown={e => projectHomeGrid.startGesture(e, widget, 'move')}
+                        className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
+                        title="Move"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                        {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
+                      </div>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
+                    </div>
+                    <div className={`flex items-center gap-0.5 transition-opacity ${projectHomeGrid.draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                      <button
+                        onClick={() => projectHomeGrid.removeWidget(widget.id)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    ref={(el) => { if (el) projectHomeGrid.bodyRefs.current.set(widget.id, el); else projectHomeGrid.bodyRefs.current.delete(widget.id); }}
+                    className="px-4 pb-4 overflow-y-auto overscroll-contain min-h-0 flex-1"
+                  >
+                    {renderProjectWidget(widget.type)}
+                  </div>
+                  <div
+                    onPointerDown={e => projectHomeGrid.startGesture(e, widget, 'resize')}
+                    className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
+                    style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
+                    title="Resize"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mobile: stacked cards */}
+          <div className="md:hidden space-y-4">
+            {projectHomeGrid.layout.map(widget => {
+              const def = PROJECT_HOME_WIDGETS.find(d => d.type === widget.type);
+              const accent = def?.accent || 'label-blue';
+              return (
+                <section key={widget.id} aria-label={widget.title} className="rounded-2xl flex flex-col overflow-hidden bg-card border border-border shadow-sm">
+                  <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                    <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                      {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
+                    </div>
+                    <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide flex-1">{widget.title}</h3>
+                    <button
+                      onClick={() => projectHomeGrid.removeWidget(widget.id)}
+                      className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                      aria-label={`Remove ${widget.title}`}
+                    >
+                      <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="px-4 pb-4 pt-1">{renderProjectWidget(widget.type)}</div>
+                </section>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {projectHomeGrid.showCustomize && (
+        <WidgetCatalog<GridWidgetDef<ProjectHomeWidgetType>>
+          definitions={PROJECT_HOME_WIDGETS}
+          surface="project"
+          closing={projectHomeGrid.panelClosing}
+          hasWidget={projectHomeGrid.hasWidget}
+          canAccessTier={projectHomeGrid.canAccessTier}
+          widgetCount={projectHomeGrid.layout.length}
+          onStartDrag={definition => event => {
+            const grid = projectHomeGrid.gridRef.current;
+            if (!grid || getComputedStyle(grid).display === 'none') return;
+            projectHomeGrid.onPanelItemPointerDown(definition)(event);
+          }}
+          onAdd={projectHomeGrid.addWidget}
+          onClose={() => projectHomeGrid.setShowCustomize(false)}
+          onUpgrade={() => navigate('/pricing')}
+          onReset={projectHomeGrid.resetToDefault}
+        />
+      )}
     </div>
   );
 
@@ -2503,66 +2805,12 @@ const conversationProps = {
 
               <div className="w-full text-left space-y-1.5">
                 <label id="member-permission-label" htmlFor="member-permission-trigger" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Permission Level</label>
-                <Select
+                <RolePermissionSelect
+                  id="member-permission-trigger"
                   value={selectedMember.role}
-                  onValueChange={async (newRole) => {
-                    try {
-                      const response = await fetch(`/api/projects/${selectedProject.id}/members/${selectedMember.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ role: newRole }),
-                      });
-                      if (response.ok) {
-                        const data = await response.json();
-                        setProjects(prev => prev.map(p => p.id === selectedProject.id ? data.project : p));
-                        setSelectedMember(prev => prev ? { ...prev, role: newRole as any } : null);
-                        toast({ title: 'Role updated', description: 'Permissions updated successfully.' });
-                      }
-                    } catch {
-                      toast({ title: 'Update failed', description: 'Could not change member role.' });
-                    }
-                  }}
+                  onChange={(newRole) => { void handleChangeProjectMemberRole(selectedMember.id, newRole); }}
                   disabled={selectedMember.id === selectedProject.ownerId}
-                >
-                  <SelectTrigger id="member-permission-trigger" aria-labelledby="member-permission-label" className="w-full h-12 bg-muted/40 border border-border rounded-xl px-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
-                    {(() => {
-                      const current = ROLE_OPTIONS.find(r => r.value === selectedMember.role);
-                      return (
-                        <span className="flex items-center gap-2.5 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: current?.color ?? '#6b7280' }} />
-                          <span className="font-semibold truncate">
-                            {current?.label ?? selectedMember.role.charAt(0).toUpperCase() + selectedMember.role.slice(1)}
-                          </span>
-                        </span>
-                      );
-                    })()}
-                  </SelectTrigger>
-                  <SelectContent
-                    align="start"
-                    sideOffset={6}
-                    collisionPadding={16}
-                    style={{
-                      width: 'var(--radix-select-trigger-width)',
-                      minWidth: 'var(--radix-select-trigger-width)',
-                      maxWidth: 'var(--radix-select-trigger-width)',
-                      maxHeight: 'min(24rem, var(--radix-select-content-available-height))',
-                    }}
-                    className="overflow-hidden rounded-xl p-1 [&_[data-radix-select-viewport]]:h-auto [&_[data-radix-select-viewport]]:min-w-0 [&_[data-radix-select-viewport]]:w-full [&_[data-radix-select-viewport]]:max-w-full [&_[data-radix-select-viewport]]:p-0"
-                  >
-                    {ROLE_OPTIONS.filter(option => option.value !== 'owner').map(option => (
-                      <SelectItem key={option.value} value={option.value} className="items-start rounded-lg py-2.5 pl-3.5 pr-9 focus:bg-muted [&>span:first-child]:left-auto [&>span:first-child]:right-2.5 [&>span:first-child]:top-3 [&>span:last-child]:min-w-0 [&>span:last-child]:flex-1">
-                        <span className="flex min-w-0 items-start gap-2.5 whitespace-normal">
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-[3px]" style={{ backgroundColor: option.color }} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-semibold text-foreground leading-tight">{option.label}</span>
-                            <span className="block text-[11px] leading-snug text-muted-foreground mt-1 whitespace-normal break-words">{option.description}</span>
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
                 {(() => {
                   const current = ROLE_OPTIONS.find(r => r.value === selectedMember.role);
                   return current ? (

@@ -103,12 +103,32 @@ export default {
           from: { opacity: "0", transform: "translateX(10px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
+        "modal-in": {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.985)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "side-panel-in": {
+          from: { opacity: "0", transform: "translateX(16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "pop-in": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        "page-in": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.2s ease-out",
         "slide-in": "slide-in 0.2s ease-out",
+        "modal-in": "modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
+        "side-panel-in": "side-panel-in 0.24s cubic-bezier(0.16, 1, 0.3, 1)",
+        "pop-in": "pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+        "page-in": "page-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },

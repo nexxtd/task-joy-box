@@ -9,6 +9,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import NotificationBell from '@/components/NotificationBell';
+import { preloadAppPage } from '@/lib/appPages';
 
 const AppSidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -45,13 +46,13 @@ const AppSidebar: React.FC = () => {
   const navItems = [
     { icon: LayoutDashboard, label: T.nav_dashboard, path: '/' },
     { icon: FolderKanban, label: T.nav_projects, path: '/projects' },
-    { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
     { icon: CalendarDays, label: T.nav_calendar, path: '/calendar' },
-    { icon: BarChart3, label: T.nav_insights, path: '/insights' },
-    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
+    { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
     { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
+    { icon: BarChart3, label: T.nav_insights, path: '/insights' },
+    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
   ];
@@ -108,6 +109,8 @@ const AppSidebar: React.FC = () => {
               onClick={() => {
                 navigate(item.path);
               }}
+              onMouseEnter={() => preloadAppPage(item.path)}
+              onFocus={() => preloadAppPage(item.path)}
               title={collapsed ? item.label : undefined}
               data-testid={`nav-${item.path === '/' ? 'dashboard' : item.path.slice(1)}`}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
@@ -185,6 +188,7 @@ const AppSidebar: React.FC = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
+              onMouseEnter={() => preloadAppPage(item.path)}
               title={collapsed ? item.label : undefined}
               data-testid={`nav-${item.path.slice(1)}`}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 ${

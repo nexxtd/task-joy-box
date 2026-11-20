@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { createPortal } from 'react-dom';
 import {
   Download,
@@ -362,8 +363,27 @@ export const ProjectConversation: React.FC<Props> = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [dropHintKind, setDropHintKind] = useState<'file' | 'planner'>('planner');
 
+  // Only this project's own tasks and notes may be dropped into its chat.
+  const isProjectItem = (type: 'task' | 'note', id: string | number) => {
+    const list = type === 'note' ? notes : tasks;
+    return list.some(item => String(item.id) === String(id));
+  };
+  const rejectForeignItem = () => {
+    toast({
+      title: 'Not part of this project',
+      description: 'Only tasks and notes from this project can be shared in its chat.',
+      variant: 'destructive',
+    });
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     const types = Array.from(e.dataTransfer?.types || []);
+    const activeItem = getActiveDraggedPlannerItem();
+    if (activeItem && !isProjectItem(activeItem.type, activeItem.id)) {
+      e.dataTransfer.dropEffect = 'none';
+      if (isDropTarget) setIsDropTarget(false);
+      return;
+    }
     const hasFiles = types.includes('Files');
     const hasPlanner =
       types.includes('application/x-planner-item') ||
@@ -418,6 +438,10 @@ export const ProjectConversation: React.FC<Props> = ({
       try {
         const parsed = JSON.parse(rawData);
         if (parsed && (parsed.type === 'task' || parsed.type === 'note') && parsed.id) {
+          if (!isProjectItem(parsed.type, parsed.id)) {
+            rejectForeignItem();
+            return;
+          }
           setLink({
             type: parsed.type,
             id: String(parsed.id),
@@ -442,6 +466,10 @@ export const ProjectConversation: React.FC<Props> = ({
     }
 
     if (activeFallback) {
+      if (!isProjectItem(activeFallback.type, activeFallback.id)) {
+        rejectForeignItem();
+        return;
+      }
       setLink({
         type: activeFallback.type,
         id: String(activeFallback.id),

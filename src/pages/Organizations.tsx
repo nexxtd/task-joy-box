@@ -1340,7 +1340,7 @@ const Organizations: React.FC = () => {
           <>
             {/* ================= USERS TAB ================= */}
             {activeTab === 'users' && (
-              <div className="space-y-4 max-w-6xl mx-auto">
+              <div className="space-y-4 w-full">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <div className="relative flex-1 max-w-md">
                     <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1516,7 +1516,7 @@ const Organizations: React.FC = () => {
 
             {/* ================= GROUPS TAB ================= */}
             {activeTab === 'groups' && !isFamily && (
-              <div className="space-y-6 max-w-5xl mx-auto">
+              <div className="space-y-6 w-full">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-foreground">Groups & Sub-groups</h2>
@@ -1738,7 +1738,7 @@ const Organizations: React.FC = () => {
 
             {/* ================= BOTH TAB ================= */}
             {activeTab === 'both' && !isFamily && (
-              <div className="space-y-6 max-w-6xl mx-auto">
+              <div className="space-y-6 w-full">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-foreground">Hierarchy & Assignments</h2>
@@ -2224,7 +2224,7 @@ const Organizations: React.FC = () => {
                       disabled={settingsSaving}
                       className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all disabled:opacity-50"
                     >
-                      {settingsSaving ? 'Saving…' : 'Save Name'}
+                      Save Name
                     </button>
                   </div>
                 </div>
@@ -2407,9 +2407,6 @@ const Organizations: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    {adminSettingsSaving && (
-                      <span className="text-[11px] text-muted-foreground">Saving…</span>
-                    )}
                   </div>
 
                   <div className="space-y-2">

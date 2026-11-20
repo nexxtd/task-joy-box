@@ -58,6 +58,26 @@ interface TaskSideViewPanelProps {
   activityEntries: TaskActivity[];
 }
 
+const projectMembersCache = new Map<number, ProjectMemberCandidate[]>();
+
+/** Members of a project, read from the projects list (there is no single-project GET route). */
+const fetchProjectMembers = async (projectId: number): Promise<ProjectMemberCandidate[]> => {
+  const res = await fetch('/api/projects', { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to load project members');
+  const data = await res.json();
+  const projects: any[] = Array.isArray(data?.projects) ? data.projects : [];
+  projects.forEach(p => {
+    const raw = Array.isArray(p?.members) ? p.members : [];
+    projectMembersCache.set(Number(p.id), raw.map((m: any) => ({
+      id: Number(m.id ?? m.userId),
+      name: m.name || m.email || 'Member',
+      email: m.email || '',
+      role: m.role || 'edit',
+    })));
+  });
+  return projectMembersCache.get(projectId) ?? [];
+};
+
 export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
   kind,
   task,
@@ -124,25 +144,18 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
       setProjectMembers([]);
       return;
     }
+    const projectId = Number(task.projectId);
     let cancelled = false;
-    setLoadingMembers(true);
-    fetch(`/api/projects/${task.projectId}`, { credentials: 'include' })
-      .then(async res => (res.ok ? res.json() : null))
-      .then(data => {
-        if (cancelled) return;
-        const raw = data?.project?.members || data?.members || [];
-        const allMembers = Array.isArray(raw)
-          ? raw.map((m: any) => ({
-              id: Number(m.id ?? m.userId),
-              name: m.name || m.email || 'Member',
-              email: m.email || '',
-              role: m.role || 'editor',
-            }))
-          : [];
-        setProjectMembers(allMembers);
+    // Show cached members instantly, then refresh in the background.
+    const cached = projectMembersCache.get(projectId);
+    if (cached) setProjectMembers(cached);
+    setLoadingMembers(!cached);
+    fetchProjectMembers(projectId)
+      .then(list => {
+        if (!cancelled) setProjectMembers(list);
       })
       .catch(() => {
-        if (!cancelled) setProjectMembers([]);
+        if (!cancelled && !cached) setProjectMembers([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingMembers(false);
@@ -369,11 +382,11 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
   return (
     <aside
       data-testid="task-side-view-panel"
-      className="w-full md:w-[360px] lg:w-[400px] flex-shrink-0 border-t md:border-t-0 md:border-l border-border bg-muted/15 flex flex-col max-h-[48vh] md:max-h-full overflow-hidden animate-fade-in"
+      className="w-full md:w-[360px] lg:w-[400px] flex-shrink-0 rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[48vh] lg:max-h-[92vh] overflow-y-auto overscroll-contain animate-side-panel-in"
       onClick={e => e.stopPropagation()}
     >
       {/* Side Panel Header — Hide side view control only */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 bg-card/70 flex-shrink-0">
+      <div className="sticky top-0 z-10 px-4 py-3 border-b border-border flex items-center justify-between gap-2 bg-card/95 backdrop-blur rounded-t-2xl flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <Sliders className="w-4 h-4 text-primary flex-shrink-0" />
           <span className="text-xs font-black uppercase tracking-wider text-foreground truncate">
@@ -393,7 +406,7 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="p-4 space-y-4">
         {/* Quick Settings */}
         <div className="space-y-2 rounded-xl border border-border bg-card/60 p-3.5">
           <div className="flex items-center justify-between">
@@ -768,7 +781,7 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
               {(task.comments || []).length === 0 ? (
                 <p className="text-xs text-muted-foreground/70 italic">No comments yet.</p>
               ) : (
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <div className="space-y-2">
                   {(task.comments || []).map(comment => {
                     const editable = isCommentOwner(comment);
                     const displayAuthor =
@@ -918,12 +931,15 @@ export const TaskSideViewPanel: React.FC<TaskSideViewPanelProps> = ({
           </button>
 
           {!activityCollapsed && (
-            <div className="border-t border-border p-3 space-y-2 max-h-52 overflow-y-auto">
+            <div className="border-t border-border p-3 space-y-2">
               {activityEntries.map(entry => (
                 <div key={entry.id} className="text-xs flex items-start gap-2 text-foreground/85">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="break-words">{entry.text}</p>
+                    {entry.actor && !entry.text.toLowerCase().startsWith(entry.actor.toLowerCase()) && (
+                      <p className="text-[10px] font-semibold text-foreground/70 mt-0.5">by {entry.actor}</p>
+                    )}
                     <p className="text-[10px] text-muted-foreground/75 mt-0.5">
                       {new Date(entry.createdAt).toLocaleString(dateLocale(), {
                         month: 'short',

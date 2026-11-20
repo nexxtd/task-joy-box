@@ -25,12 +25,27 @@ import type { LucideIcon } from 'lucide-react';
  * same list, so a page only has to be registered once. Keep the lazy imports
  * here (not in App.tsx) so both consumers share one chunk per page.
  */
+type PageModule = { default: ComponentType<any> };
+type PreloadableLazy = LazyExoticComponent<ComponentType<any>> & { preload: () => Promise<PageModule> };
+
+/** lazy() plus a cached preload() so a page chunk can be fetched before navigation. */
+const lazyPage = (loader: () => Promise<PageModule>): PreloadableLazy => {
+  let pending: Promise<PageModule> | null = null;
+  const load = () => {
+    if (!pending) pending = loader().catch(err => { pending = null; throw err; });
+    return pending;
+  };
+  const component = lazy(load) as PreloadableLazy;
+  component.preload = load;
+  return component;
+};
+
 export interface AppPageDef {
   path: string;
   /** English source label; the JSX runtime translates it on render. */
   label: string;
   icon: LucideIcon;
-  component: LazyExoticComponent<ComponentType<any>>;
+  component: PreloadableLazy;
   /** Offer this page in the split-screen page picker. */
   inSplitPicker?: boolean;
   /** Only show in the picker for pro/premium accounts. */
@@ -44,7 +59,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    component: lazy(() => import('@/pages/Dashboard')),
+    component: lazyPage(() => import('@/pages/Dashboard')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -52,7 +67,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/projects',
     label: 'Projects',
     icon: FolderKanban,
-    component: lazy(() => import('@/pages/Projects')),
+    component: lazyPage(() => import('@/pages/Projects')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -60,7 +75,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/tasks',
     label: 'Tasks',
     icon: CheckSquare,
-    component: lazy(() => import('@/pages/Tasks')),
+    component: lazyPage(() => import('@/pages/Tasks')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -68,14 +83,14 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/calendar',
     label: 'Calendar',
     icon: CalendarDays,
-    component: lazy(() => import('@/pages/CalendarPage')),
+    component: lazyPage(() => import('@/pages/CalendarPage')),
     minSplitWidth: 560,
   },
   {
     path: '/insights',
     label: 'Insights',
     icon: BarChart3,
-    component: lazy(() => import('@/pages/Insights')),
+    component: lazyPage(() => import('@/pages/Insights')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -83,7 +98,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/ai-chat',
     label: 'AI Assistant',
     icon: Wand2,
-    component: lazy(() => import('@/pages/AIChat')),
+    component: lazyPage(() => import('@/pages/AIChat')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -91,7 +106,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/notes',
     label: 'Notes',
     icon: StickyNote,
-    component: lazy(() => import('@/pages/Notes')),
+    component: lazyPage(() => import('@/pages/Notes')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -99,21 +114,21 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/templates',
     label: 'Templates',
     icon: LayoutTemplate,
-    component: lazy(() => import('@/pages/Templates')),
+    component: lazyPage(() => import('@/pages/Templates')),
     minSplitWidth: 560,
   },
   {
     path: '/documents',
     label: 'Documents',
     icon: FileText,
-    component: lazy(() => import('@/pages/Documents')),
+    component: lazyPage(() => import('@/pages/Documents')),
     // Documents is an unbuilt coming-soon stub — keep it out of the split picker.
   },
   {
     path: '/collaboration',
     label: 'Collaboration',
     icon: Users,
-    component: lazy(() => import('@/pages/Collaboration')),
+    component: lazyPage(() => import('@/pages/Collaboration')),
     minSplitWidth: 560,
     paidOnly: true,
   },
@@ -121,7 +136,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/organizations',
     label: 'Organizations',
     icon: Building2,
-    component: lazy(() => import('@/pages/Organizations')),
+    component: lazyPage(() => import('@/pages/Organizations')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -129,7 +144,7 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/support',
     label: 'Support',
     icon: LifeBuoy,
-    component: lazy(() => import('@/pages/Support')),
+    component: lazyPage(() => import('@/pages/Support')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },
@@ -137,15 +152,31 @@ export const APP_PAGES: AppPageDef[] = [
     path: '/pricing',
     label: 'Pricing',
     icon: CreditCard,
-    component: lazy(() => import('@/pages/Pricing')),
+    component: lazyPage(() => import('@/pages/Pricing')),
   },
   {
     path: '/settings',
     label: 'Settings',
     icon: Settings,
-    component: lazy(() => import('@/pages/SettingsPage')),
+    component: lazyPage(() => import('@/pages/SettingsPage')),
   },
 ];
 
 export const findAppPage = (path: string): AppPageDef | undefined =>
   APP_PAGES.find(page => page.path === path);
+
+const matchAppPage = (path: string): AppPageDef | undefined =>
+  findAppPage(path) ?? APP_PAGES.find(page => page.path !== '/' && path.startsWith(page.path));
+
+/** Fetch a page's chunk ahead of navigation (e.g. on hover) so the switch is instant. */
+export const preloadAppPage = (path: string): void => {
+  const page = matchAppPage(path);
+  if (page) void page.component.preload().catch(() => {});
+};
+
+/** Warm every page chunk, one after another, so no navigation waits on the network. */
+export const preloadAllAppPages = async (): Promise<void> => {
+  for (const page of APP_PAGES) {
+    try { await page.component.preload(); } catch { /* retry on real navigation */ }
+  }
+};

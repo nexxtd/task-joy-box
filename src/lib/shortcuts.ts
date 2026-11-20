@@ -351,6 +351,11 @@ export function runShortcutAction(
     if (domEvent) {
       try { window.dispatchEvent(new CustomEvent(domEvent)); } catch {}
     }
+    // Commands without a page (e.g. Global Search) only fire their event —
+    // they must never fall through to navigating to the dashboard.
+    if (!action.path) {
+      if (domEvent) return;
+    }
     const path = action.path || '/';
     if (navigate) {
       navigate(path);

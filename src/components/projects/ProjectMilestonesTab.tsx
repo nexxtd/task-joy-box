@@ -59,13 +59,13 @@ export const ProjectMilestonesTab: React.FC<ProjectMilestonesTabProps> = ({
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [saving, setSaving] = useState(false);
+  const saving = false;
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
+  const savingEdit = false;
 
   const stats = useMemo(() => {
     const total = milestones.length;
@@ -116,37 +116,28 @@ export const ProjectMilestonesTab: React.FC<ProjectMilestonesTabProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newDate || saving) return;
-    setSaving(true);
-    try {
-      await onCreateMilestone({
-        name: newName.trim(),
-        date: newDate,
-        description: newDescription.trim(),
-      });
-      setNewName('');
-      setNewDate('');
-      setNewDescription('');
-      setCreateOpen(false);
-    } finally {
-      setSaving(false);
-    }
+    if (!newName.trim() || !newDate) return;
+    // Close instantly; the parent adds the milestone optimistically.
+    void onCreateMilestone({
+      name: newName.trim(),
+      date: newDate,
+      description: newDescription.trim(),
+    });
+    setNewName('');
+    setNewDate('');
+    setNewDescription('');
+    setCreateOpen(false);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId === null || !editName.trim() || !editDate || savingEdit) return;
-    setSavingEdit(true);
-    try {
-      await onUpdateMilestone(editingId, {
-        name: editName.trim(),
-        date: editDate,
-        description: editDescription.trim(),
-      });
-      setEditingId(null);
-    } finally {
-      setSavingEdit(false);
-    }
+    if (editingId === null || !editName.trim() || !editDate) return;
+    void onUpdateMilestone(editingId, {
+      name: editName.trim(),
+      date: editDate,
+      description: editDescription.trim(),
+    });
+    setEditingId(null);
   };
 
   // SVG Ring math

@@ -231,16 +231,18 @@ describe('workspace improvements regression suite', () => {
     const onUpdateTask = vi.fn();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('/api/projects/12')) {
+      // Members come from the projects list (there is no single-project GET route).
+      if (url.endsWith('/api/projects')) {
         return {
           ok: true,
           json: async () => ({
-            project: {
+            projects: [{
+              id: 12,
               members: [
                 { id: 101, name: 'Alice Owner', email: 'alice@example.com', role: 'owner' },
                 { id: 202, name: 'Bob Teammate', email: 'bob@example.com', role: 'edit' },
               ],
-            },
+            }],
           }),
         } as any;
       }

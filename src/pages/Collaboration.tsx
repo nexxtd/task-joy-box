@@ -562,7 +562,7 @@ const Collaboration: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full">
+      <div className="p-4 sm:p-6 w-full">
         {/* Informational banner about collaboration features */}
         <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">

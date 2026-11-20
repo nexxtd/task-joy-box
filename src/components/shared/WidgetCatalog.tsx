@@ -17,7 +17,7 @@ interface CatalogDefinition {
 
 interface Props<D extends CatalogDefinition> {
   definitions: readonly D[];
-  surface: 'dashboard' | 'insights';
+  surface: 'dashboard' | 'insights' | 'project';
   closing: boolean;
   hasWidget: (type: D['type']) => boolean;
   canAccessTier: (tier: CatalogTier) => boolean;
@@ -48,8 +48,8 @@ export function WidgetCatalog<D extends CatalogDefinition>({
       return terms.every(term => text.includes(term));
     });
   }, [definitions, search, t]);
-  const title = surface === 'dashboard' ? t('Customize Dashboard') : t('Customize Insights');
-  const surfaceLabel = surface === 'dashboard' ? t('Dashboard') : t('Insights');
+  const title = surface === 'dashboard' ? t('Customize Dashboard') : surface === 'project' ? t('Customize Project Home') : t('Customize Insights');
+  const surfaceLabel = surface === 'dashboard' ? t('Dashboard') : surface === 'project' ? t('Project Home') : t('Insights');
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end" data-widget-catalog={surface}>
