@@ -174,9 +174,35 @@ export const preloadAppPage = (path: string): void => {
   if (page) void page.component.preload().catch(() => {});
 };
 
-/** Warm every page chunk, one after another, so no navigation waits on the network. */
-export const preloadAllAppPages = async (): Promise<void> => {
-  for (const page of APP_PAGES) {
-    try { await page.component.preload(); } catch { /* retry on real navigation */ }
-  }
+/**
+ * Warm only the likeliest next pages, one per idle slot. Preloading every page
+ * pulls in ~1.5 MB of JS (antd, admin, settings...) and evaluates it on the main
+ * thread right after login, which makes the whole app stutter. Other pages are
+ * still warmed on sidebar hover/focus via preloadAppPage.
+ */
+const LIKELY_NEXT_PAGES = ['/tasks', '/projects', '/notes'];
+export const preloadLikelyAppPages = (): (() => void) => {
+  const ric: ((cb: () => void, opts?: { timeout: number }) => number) | undefined =
+    typeof window !== 'undefined' ? (window as any).requestIdleCallback : undefined;
+  const cic: ((id: number) => void) | undefined =
+    typeof window !== 'undefined' ? (window as any).cancelIdleCallback : undefined;
+  const queue = LIKELY_NEXT_PAGES.map(findAppPage).filter((p): p is AppPageDef => !!p);
+  let handle: number | undefined;
+  let cancelled = false;
+  const next = () => {
+    if (cancelled) return;
+    const page = queue.shift();
+    if (!page) return;
+    page.component.preload().catch(() => {}).finally(() => schedule());
+  };
+  const schedule = () => {
+    if (cancelled || queue.length === 0) return;
+    handle = ric ? ric(next, { timeout: 10000 }) : (setTimeout(next, 2000) as unknown as number);
+  };
+  schedule();
+  return () => {
+    cancelled = true;
+    if (handle === undefined) return;
+    if (ric) cic?.(handle); else clearTimeout(handle);
+  };
 };

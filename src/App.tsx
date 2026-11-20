@@ -13,7 +13,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { PageSkeleton, AppShellSkeleton } from "@/components/PageSkeleton";
 import { APP_VERSION, needsWhatsNew } from "@/lib/appVersion";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
-import { APP_PAGES, preloadAllAppPages } from "@/lib/appPages";
+import { APP_PAGES, preloadLikelyAppPages } from "@/lib/appPages";
 import { hasCompletedTutorialLocally, markTutorialCompleted } from "@/lib/tutorialProgress";
 
 // LoginPage (incl. Google OAuth SDK) is only needed on /login, so it stays
@@ -264,23 +264,15 @@ function ProtectedRoutes() {
   // instant — without downloading the whole app (antd/recharts/AI) on boot,
   // which saturated the network and made everything feel slow to load.
   useEffect(() => {
-    const preload = () => {
-      // Warm every page chunk in the background so switching pages never
-      // shows a loading skeleton.
-      void preloadAllAppPages();
-    };
     try {
       const conn = (navigator as any)?.connection;
       // Respect data-saver / very slow connections: skip preloading entirely.
       if (conn && (conn.saveData || /2g/.test(String(conn.effectiveType || '')))) return;
-      const ric = (window as any).requestIdleCallback;
-      if (typeof ric === 'function') {
-        const id = ric(preload, { timeout: 1500 });
-        return () => { try { (window as any).cancelIdleCallback?.(id); } catch {} };
-      }
     } catch {}
-    const t = setTimeout(preload, 300);
-    return () => clearTimeout(t);
+    // Give the first page time to load its own data before warming others.
+    let cancelPreload: (() => void) | undefined;
+    const t = setTimeout(() => { cancelPreload = preloadLikelyAppPages(); }, 4000);
+    return () => { clearTimeout(t); cancelPreload?.(); };
   }, []);
   useEffect(() => {
     let cancelled = false;
